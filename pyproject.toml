@@ -1,0 +1,49 @@
+[project]
+name = "avianscale-cv"
+version = "0.1.0"
+description = "Classical PDI & EXIF-calibrated broiler live-weight estimation MVP"
+requires-python = ">=3.12,<3.13"
+dependencies = [
+    "opencv-python-headless>=4.14.0,<5.0",
+    "scikit-image>=0.26.0,<0.27",
+    "scipy>=1.18.0,<2.0",
+    "pillow>=13.0.0,<14.0",
+    "numpy>=2.5.0,<3.0",
+    "pandas>=3.1.0,<4.0",
+    "pyarrow>=26.0.0,<27.0",
+    "scikit-learn>=1.9.0,<2.0",
+    "lightgbm>=4.7.0,<5.0",
+    "joblib>=1.6.0,<2.0",
+    "fastapi>=0.165.0,<1.0",
+    "uvicorn[standard]>=0.54.0,<1.0",
+    "pydantic>=2.14.0,<3.0",
+    "python-multipart>=0.0.34",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=9.2.0",
+    "httpx>=0.28.1",
+    "ruff>=0.17.6",
+]
+
+[tool.uv]
+package = false
+no-build = true
+python-preference = "only-managed"
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+testpaths = ["backend/tests"]
+addopts = ["-ra", "-q"]
+
+[tool.ruff]
+target-version = "py312"
+line-length = 100
+src = ["."]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["backend"]
