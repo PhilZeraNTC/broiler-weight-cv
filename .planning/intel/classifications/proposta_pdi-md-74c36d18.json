@@ -1,0 +1,24 @@
+{
+  "source_path": "docs/proposta_pdi.md.pdf",
+  "type": "PRD",
+  "confidence": "medium",
+  "manifest_override": false,
+  "title": "Proposta: Estimativa de peso de frangos de corte por visão computacional",
+  "summary": "Project proposal for a non-contact broiler weight estimation MVP using classical digital image processing and regression, validated on the Broiler weights of Cobb Avian dataset.",
+  "scope": [
+    "broiler weight estimation",
+    "classical digital image processing",
+    "image preprocessing",
+    "thresholding and morphological segmentation",
+    "watershed segmentation",
+    "geometric feature extraction",
+    "weight regression model",
+    "Broiler weights of Cobb Avian dataset",
+    "image and video MVP application",
+    "density and activity monitoring"
+  ],
+  "cross_refs": [],
+  "locked": false,
+  "precedence": null,
+  "notes": "One-page prose project proposal without formal PRD headings, user stories, or acceptance criteria. Competing PRD signals (business problem, proposed solution, MVP scope, deliverable, target audience, future extension) and DOC signals (short prose overview with high-level PDI pipeline description); resolved to PRD via higher precedence (PRD > DOC)."
+}

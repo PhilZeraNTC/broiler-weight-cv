@@ -1,0 +1,23 @@
+{
+  "source_path": "docs/dataset/DOCUMENTACAO_DATASET_BROILER_COBB_AVIAN.md",
+  "type": "DOC",
+  "confidence": "high",
+  "manifest_override": false,
+  "title": "Documentação Técnica, Auditoria e Catálogo do Dataset: Broiler weights of Cobb Avian",
+  "summary": "Technical documentation, forensic quality audit, data card, reference ingestion pipeline, and 168-folder catalog for the Broiler weights of Cobb Avian dataset.",
+  "scope": [
+    "Broiler weights of Cobb Avian dataset",
+    "Cobb Avian 48",
+    "SF-400 digital scale",
+    "Xiaomi Redmi 10 EXIF metadata",
+    "directory structure and filename encoding",
+    "data quality audit and anomalies",
+    "anti-leakage cross-validation",
+    "Python ingestion pipeline",
+    "leaf folder catalog"
+  ],
+  "cross_refs": [],
+  "locked": false,
+  "precedence": null,
+  "notes": ""
+}

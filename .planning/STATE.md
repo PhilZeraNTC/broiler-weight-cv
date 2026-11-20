@@ -23,7 +23,7 @@ See: .planning/PROJECT.md (updated 2026-11-20)
 Phase: 1 of 4 (Forensic Data Curation & Anti-Leakage Split)
 Plan: 0 of 0 in current phase
 Status: Ready to plan
-Last activity: 2026-11-20 — Initialized v1.0 roadmap (4 coarse MVP phases, 15/15 requirements mapped)
+Last activity: 2026-11-20 — Ingested docs/ (`proposta_pdi.md.pdf` + dataset audit), resolved 4 competing variants into planning artifacts
 
 Progress: [░░░░░░░░░░] 0%
 
@@ -57,6 +57,7 @@ Recent decisions affecting current work:
 - [Init]: Single-source classical PDI engine (`backend/app/pdi/`) shared verbatim between offline extraction (`n_jobs=4`, `768–960 px` aspect-preserving) and FastAPI runtime (`async def` + `run_in_threadpool`, `cv2.setNumThreads(2)`), locked via SHA-256 `PDIConfig` hash.
 - [Init]: Ban raw `cv2.imread`/`cv2.imdecode` repo-wide in favor of one Pillow EXIF-first loader (`ImageOps.exif_transpose()` + Xiaomi tag `39321`); enforce outside-mask pixel-perturbation invariance tests (`PROIBIÇÃO 2`).
 - [Init]: Dual-bundle `models/weight_regressor.joblib` (`production_pipeline` + 5 `fold_pipelines`) guarantees honest out-of-fold scoring on live pitch presets with zero `.jpg` files committed to Git.
+- [Ingest]: Merged `docs/` (`proposta_pdi.md.pdf` + dataset audit): v1 stays image-only (EXIF dual-lens, audited `116–2,093 g` / `~7–29 d` with Mendeley "45 days" disclosure in `WEB-05`), while Watershed (`PDI-05`/`WEB-04`) adds per-instance feature extraction + illustrative per-bird weight & scene mean with explicit group-sum disclaimer.
 
 ### Pending Todos
 
@@ -77,6 +78,6 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-11-20 20:33
-Stopped at: Roadmap & STATE.md initialized; ready for Phase 1 planning
+Last session: 2026-11-20 17:55
+Stopped at: Ingested docs/ (merge mode) and updated planning artifacts; ready for Phase 1 planning
 Resume file: None

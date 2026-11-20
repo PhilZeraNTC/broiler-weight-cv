@@ -13,7 +13,7 @@ Estimar o peso vivo individual de frangos de corte de forma precisa, rigorosamen
 - **Customer**: Produtores integrados de frango de corte e agroindústrias avícolas (contexto do Paraná, maior produtor brasileiro, onde a pesagem manual por amostragem gera estresse animal, lentidão e baixa frequência de dados).
 - **Revenue model**: MVP local de validação para pitch acadêmico/produto (evoluindo no roadmap conceitual para monitoramento contínuo com câmera fixa no teto do aviário).
 - **Success metric**: Regressão validada em 5-fold `StratifiedGroupKFold` por `session_id` com ablação comprovando ganho da calibração óptica EXIF, métricas estratificadas (MAE, RMSE, MAPE, $R^2$) por faixa de peso/lente/cenário, inferência local `< 500 ms` por imagem e MVP concluído até 2026-11-28 para pitch em 2026-11-30.
-- **Strategy notes**: Especificação em [PRD.md](PRD.md) e auditoria forense completa do dataset em [DOCUMENTACAO_DATASET_BROILER_COBB_AVIAN.md](docs/dataset/DOCUMENTACAO_DATASET_BROILER_COBB_AVIAN.md).
+- **Strategy notes**: Especificação em [PRD.md](PRD.md), proposta acadêmica em [proposta_pdi.md.pdf](docs/proposta_pdi.md.pdf), auditoria forense completa em [DOCUMENTACAO_DATASET_BROILER_COBB_AVIAN.md](docs/dataset/DOCUMENTACAO_DATASET_BROILER_COBB_AVIAN.md) e síntese de ingestão em [.planning/intel/SYNTHESIS.md](.planning/intel/SYNTHESIS.md).
 
 ## Requirements
 
@@ -75,6 +75,10 @@ Estimar o peso vivo individual de frangos de corte de forma precisa, rigorosamen
 | Validação 5-fold `StratifiedGroupKFold` por `session_id` (gap > 10 min) com métricas estratificadas por faixa de peso, lente e cenário | Elimina *split leakage* entre rajadas da mesma ave e expõe comportamento real na cauda rara `>1.000 g` | — Pending |
 | Quarentenar 15 imagens (`417`, `757`, `823`, `1520`, `1351`, `1465`) e corrigir `367` → `267 g`, reutilizando as 4 pastas multi-aves exclusivamente no módulo Watershed | Limpa ruído severo da regressão de ave única enquanto aproveita dados reais multi-aves para demonstrar separação de instâncias encostadas | — Pending |
 | Arquitetura desacoplada FastAPI local + SPA React/TypeScript/Vite/Tailwind em 4 fases (Coarse granularity) | Alinha diretamente ao prazo de 28/11, mantém latência `< 500 ms` e entrega UI polida e orientada a dados para o pitch | — Pending |
+| Manter v1 estritamente upload de imagem (sem vídeo) — resolução de `WARNING 1` (`proposta_pdi.md.pdf` vs. `PRD.md`) | Preserva `PROIBIÇÃO 5` e o prazo de 28/11; vídeo multi-frame permanece no roadmap conceitual | ✓ Good |
+| Exibir peso estimado ilustrativo por ave + média da cena no módulo Watershed com disclaimer de soma de grupo — resolução de `WARNING 2` | Atende à proposta acadêmica (`proposta_pdi.md.pdf`) mantendo rigor científico sobre `417`/`757`/`823`/`1520` (que só têm rótulo de peso somado) | — Pending |
+| Manter calibração EXIF dual-lens no v1 e câmera fixa vertical no teto no roadmap v2 (`BARN-01`) — resolução de `WARNING 3` | Alinha o v1 à realidade física das imagens handheld do dataset auditado enquanto preserva a arquitetura-alvo do galpão no painel `WEB-04` | ✓ Good |
+| Travar validação v1 em `116–2.093 g` (~7–29 dias) e divulgar explicitamente a divergência dos "45 dias" do Mendeley no `WEB-05` — resolução de `WARNING 4` | Evita promessas impossíveis na faixa ausente `30–45 dias` (`BARN-02`) e reforça a transparência forense no pitch | ✓ Good |
 
 ## Evolution
 
@@ -94,4 +98,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-11-20 after initialization*
+*Last updated: 2026-11-20 after ingest-docs merge (`docs/`)*
