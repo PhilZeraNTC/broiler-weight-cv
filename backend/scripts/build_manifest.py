@@ -16,6 +16,7 @@ from pathlib import Path
 
 import pandas as pd
 
+from backend.app.config import AUDIT_SUMMARY_PATH, PROCESSED_DIR, RAW_DATASET_DIR
 from backend.app.pdi.io_exif import read_exif_metadata
 
 _TRACER_COLUMNS = [
@@ -36,19 +37,19 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     parser.add_argument(
         "--dataset-root",
         type=Path,
-        default=Path("data/raw/Broiler weights of Cobb Avian"),
+        default=RAW_DATASET_DIR,
         help="Root directory containing raw broiler weight JPEG folders (read-only).",
     )
     parser.add_argument(
         "--output-dir",
         type=Path,
-        default=Path("data/processed"),
+        default=PROCESSED_DIR,
         help="Output directory for generated Parquet manifests.",
     )
     parser.add_argument(
         "--summary-path",
         type=Path,
-        default=Path("models/dataset_audit_summary.json"),
+        default=AUDIT_SUMMARY_PATH,
         help="Destination path for the aggregate JSON audit summary.",
     )
     parser.add_argument(
