@@ -36,7 +36,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 **Plans**: TBD
 
 - [x] 01-01-PLAN.md
-- [ ] 01-02-PLAN.md
+- [x] 01-02-PLAN.md
 - [ ] 01-03-PLAN.md
 
 ### Phase 2: Classical PDI Engine, Optical Calibration & Watershed
@@ -94,7 +94,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Forensic Data Curation & Anti-Leakage Split | 1/3 | In Progress|  |
+| 1. Forensic Data Curation & Anti-Leakage Split | 2/3 | In Progress|  |
 | 2. Classical PDI Engine, Optical Calibration & Watershed | 0/0 | Not started | - |
 | 3. Tabular Regression, Optical Ablation & Production Bundling | 0/0 | Not started | - |
 | 4. FastAPI Local Backend & Interactive Pitch Web Studio | 0/0 | Not started | - |
