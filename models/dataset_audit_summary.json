@@ -1,0 +1,315 @@
+{
+  "curation_funnel": {
+    "clean_images": 1738,
+    "clean_leaf_folders": 162,
+    "clean_sessions": 188,
+    "clean_unique_weights": 160,
+    "lcd_corrected_images": {
+      "corrections_applied": {
+        "367": 267
+      },
+      "count": 6
+    },
+    "quarantined_multi_bird": {
+      "count": 13,
+      "folders": [
+        "1520",
+        "417",
+        "757",
+        "823"
+      ],
+      "per_folder_counts": {
+        "1520": 4,
+        "417": 4,
+        "757": 1,
+        "823": 4
+      }
+    },
+    "quarantined_severe_mislabel": {
+      "count": 2,
+      "folders": [
+        "1351",
+        "1465"
+      ],
+      "per_folder_counts": {
+        "1351": 1,
+        "1465": 1
+      }
+    },
+    "quarantined_total": 15,
+    "raw_images": 1753,
+    "raw_sessions": 194
+  },
+  "dataset_identity": {
+    "breed": "Cobb Avian 48",
+    "capture_device": "Xiaomi Redmi 10",
+    "doi": "10.17632/zrs8kk9dvr.1",
+    "name": "Broiler weights of Cobb Avian",
+    "scale_model": "SF-400"
+  },
+  "distributions": {
+    "coverage_gaps": {
+      "temporal_hiatus": {
+        "gap_end_date": "2022-04-11",
+        "gap_start_date": "2022-04-03",
+        "max_gap_days": 8
+      },
+      "weight_sparse_interval": {
+        "clean_images_inside": 6,
+        "clean_sessions_inside": 1,
+        "clean_unique_weights_inside": 1,
+        "clean_weights_inside": [
+          1009
+        ],
+        "lower_exclusive_g": 801,
+        "span_g": 415,
+        "upper_exclusive_g": 1216
+      }
+    },
+    "lenses": {
+      "ultrawide": {
+        "n_images": 441,
+        "n_sessions": 127,
+        "pct_images": 25.37
+      },
+      "wide": {
+        "n_images": 1297,
+        "n_sessions": 188,
+        "pct_images": 74.63
+      }
+    },
+    "timeline_by_date": [
+      {
+        "date": "2022-03-24",
+        "n_images": 347,
+        "n_sessions": 36,
+        "weight_max_g": 229,
+        "weight_min_g": 116
+      },
+      {
+        "date": "2022-03-25",
+        "n_images": 298,
+        "n_sessions": 28,
+        "weight_max_g": 271,
+        "weight_min_g": 173
+      },
+      {
+        "date": "2022-03-28",
+        "n_images": 146,
+        "n_sessions": 12,
+        "weight_max_g": 407,
+        "weight_min_g": 321
+      },
+      {
+        "date": "2022-03-29",
+        "n_images": 387,
+        "n_sessions": 42,
+        "weight_max_g": 454,
+        "weight_min_g": 225
+      },
+      {
+        "date": "2022-03-31",
+        "n_images": 151,
+        "n_sessions": 18,
+        "weight_max_g": 650,
+        "weight_min_g": 301
+      },
+      {
+        "date": "2022-04-01",
+        "n_images": 177,
+        "n_sessions": 21,
+        "weight_max_g": 696,
+        "weight_min_g": 434
+      },
+      {
+        "date": "2022-04-03",
+        "n_images": 42,
+        "n_sessions": 6,
+        "weight_max_g": 801,
+        "weight_min_g": 518
+      },
+      {
+        "date": "2022-04-11",
+        "n_images": 115,
+        "n_sessions": 15,
+        "weight_max_g": 1569,
+        "weight_min_g": 719
+      },
+      {
+        "date": "2022-04-15",
+        "n_images": 75,
+        "n_sessions": 10,
+        "weight_max_g": 2093,
+        "weight_min_g": 1454
+      }
+    ],
+    "weight_bands": {
+      "500-1000g": {
+        "n_images": 333,
+        "n_sessions": 40,
+        "n_ultrawide": 53,
+        "n_wide": 280,
+        "pct_images": 19.16
+      },
+      "<500g": {
+        "n_images": 1223,
+        "n_sessions": 124,
+        "n_ultrawide": 283,
+        "n_wide": 940,
+        "pct_images": 70.37
+      },
+      ">1000g": {
+        "n_images": 182,
+        "n_sessions": 24,
+        "n_ultrawide": 105,
+        "n_wide": 77,
+        "pct_images": 10.47
+      }
+    }
+  },
+  "encoding_and_exif_recovery": {
+    "cp866_mtime_fallback_count": 0,
+    "cp866_recovered_count": 21,
+    "exif_orientation_rotated_count": 1435,
+    "exif_orientation_rotated_pct": 81.86,
+    "filename_pattern_counts": {
+      "img_arabic": 1628,
+      "img_arabic_burst": 7,
+      "img_mojibake_cp866": 21,
+      "weight_renamed": 97
+    },
+    "mtime_fallback_count": 97,
+    "mtime_offset_sec": 14401,
+    "nested_level2_folders": [
+      "171/173",
+      "190/191",
+      "190/193"
+    ],
+    "nested_level2_images_count": 39,
+    "orientation_counts": {
+      "1": 318,
+      "3": 299,
+      "6": 1017,
+      "8": 119
+    },
+    "suffix_sanitized_folders": [
+      "1340_"
+    ],
+    "variable_digital_zoom_count": 67,
+    "year_2024_capture_count": 0
+  },
+  "mendeley_vs_disk_reconciliation": {
+    "disk_audit": {
+      "calendar_span_days": 23,
+      "clean_weight_max_g": 2093,
+      "clean_weight_min_g": 116,
+      "date_max": "2022-04-15",
+      "date_min": "2022-03-24",
+      "distinct_capture_dates": 9,
+      "estimated_developmental_age_days_range": "~7-29 days",
+      "missing_vs_mendeley_images": 19,
+      "raw_images": 1753,
+      "raw_leaf_folders": 168,
+      "raw_sessions": 194,
+      "raw_unique_weights": 166
+    },
+    "published_claims": {
+      "published_duration_claim": "daily for 45 days",
+      "published_images": 1772,
+      "published_weight_note": "no curated quarantine or EXIF optical calibration disclosed"
+    }
+  },
+  "schema_version": "1.0.0",
+  "split_audit": {
+    "cross_fold_session_overlap": 0,
+    "folds": [
+      {
+        "fold": 0,
+        "lens_counts": {
+          "ultrawide": 105,
+          "wide": 242
+        },
+        "n_heavy_images": 34,
+        "n_heavy_sessions": 4,
+        "n_images": 347,
+        "n_sessions": 37,
+        "weight_band_counts": {
+          "500-1000g": 67,
+          "<500g": 246,
+          ">1000g": 34
+        }
+      },
+      {
+        "fold": 1,
+        "lens_counts": {
+          "ultrawide": 92,
+          "wide": 257
+        },
+        "n_heavy_images": 37,
+        "n_heavy_sessions": 5,
+        "n_images": 349,
+        "n_sessions": 38,
+        "weight_band_counts": {
+          "500-1000g": 67,
+          "<500g": 245,
+          ">1000g": 37
+        }
+      },
+      {
+        "fold": 2,
+        "lens_counts": {
+          "ultrawide": 80,
+          "wide": 269
+        },
+        "n_heavy_images": 36,
+        "n_heavy_sessions": 5,
+        "n_images": 349,
+        "n_sessions": 38,
+        "weight_band_counts": {
+          "500-1000g": 67,
+          "<500g": 246,
+          ">1000g": 36
+        }
+      },
+      {
+        "fold": 3,
+        "lens_counts": {
+          "ultrawide": 78,
+          "wide": 267
+        },
+        "n_heavy_images": 38,
+        "n_heavy_sessions": 5,
+        "n_images": 345,
+        "n_sessions": 37,
+        "weight_band_counts": {
+          "500-1000g": 66,
+          "<500g": 241,
+          ">1000g": 38
+        }
+      },
+      {
+        "fold": 4,
+        "lens_counts": {
+          "ultrawide": 86,
+          "wide": 262
+        },
+        "n_heavy_images": 37,
+        "n_heavy_sessions": 5,
+        "n_images": 348,
+        "n_sessions": 38,
+        "weight_band_counts": {
+          "500-1000g": 66,
+          "<500g": 245,
+          ">1000g": 37
+        }
+      }
+    ],
+    "group_column": "session_id",
+    "n_splits": 5,
+    "random_state": 42,
+    "session_gap_threshold_seconds": 600,
+    "shuffle": true,
+    "strategy": "StratifiedGroupKFold",
+    "stratify_column": "weight_band"
+  }
+}
