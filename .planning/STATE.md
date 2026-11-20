@@ -1,6 +1,13 @@
 ---
-gsd_state_version: '1.0'
+gsd_state_version: "1.0"
+current_phase: 1
+current_phase_name: Forensic Data Curation & Anti-Leakage Split
 status: planning
+stopped_at: Phase 1 context gathered
+last_updated: "2026-11-20T21:00:21.502Z"
+last_activity: 2026-11-20
+last_activity_desc: Ingested docs/ (`proposta_pdi.md.pdf` + dataset audit), resolved 4 competing variants into planning artifacts
+state_head: 1438a7c5cd089e0058f3805accd563a66557b269
 progress:
   total_phases: 4
   completed_phases: 0
@@ -30,6 +37,7 @@ Progress: [░░░░░░░░░░] 0%
 ## Performance Metrics
 
 **Velocity:**
+
 - Total plans completed: 0
 - Average duration: -
 - Total execution time: 0.0 hours
@@ -41,6 +49,7 @@ Progress: [░░░░░░░░░░] 0%
 | - | - | - | - |
 
 **Recent Trend:**
+
 - Last 5 plans: none yet
 - Trend: -
 
@@ -78,6 +87,6 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-11-20 17:55
-Stopped at: Ingested docs/ (merge mode) and updated planning artifacts; ready for Phase 1 planning
-Resume file: None
+Last session: 2026-11-20T21:00:21.489Z
+Stopped at: Phase 1 context gathered
+Resume file: .planning/phases/01-forensic-data-curation-anti-leakage-split/01-CONTEXT.md
