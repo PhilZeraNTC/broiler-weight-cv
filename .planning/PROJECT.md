@@ -19,12 +19,11 @@ Estimar o peso vivo individual de frangos de corte de forma precisa, rigorosamen
 
 ### Validated
 
-(None yet — ship to validate)
+- ✓ **Ingestor Forense Determinístico (REQ-01 / DATA-01):** Varrer recursivamente `data/raw/Broiler weights of Cobb Avian/` aplicando todas as regras da Auditoria §9 (`1.738` limpas, `15` quarentena, `160` pesos únicos, `188` sessões, `367 → 267 g`, CP866/árabe/EXIF/Xiaomi `39321`) persistindo Parquets tipados e `models/dataset_audit_summary.json` — Phase 1
+- ✓ **Split Anti-Leakage Reprodutível (REQ-02 / DATA-02):** Agrupamento por `session_id` (gap `> 600 s`) e 5-fold `StratifiedGroupKFold` estratificado (`<500 g`, `500–1000 g`, `>1000 g`) com `0` sobreposição e `[4, 5, 5, 5, 5]` sessões pesadas por fold — Phase 1
 
 ### Active
 
-- [ ] **Ingestor Forense Determinístico (REQ-01):** Varrer recursivamente `data/raw/Broiler weights of Cobb Avian/` aplicando todas as regras de curadoria da Seção 9 da auditoria (pastas aninhadas nível 2, sanitização `1340_`, reversão mojibake CP866, dígitos arábico-orientais, reconstrução de `capture_dt`, transposição EXIF, extração óptica Xiaomi tag `39321`, quarentena de 15 imagens e correção `367` → `267 g`), persistindo `data/processed/manifest_clean.parquet` (1.738 imgs) e `data/processed/manifest_quarantine.parquet` (15 imgs).
-- [ ] **Split Anti-Leakage Reprodutível (REQ-02):** Agrupar capturas da mesma pasta com intervalo $\le 10$ min em `session_id` único e atribuir 5 folds via `StratifiedGroupKFold` estratificado por faixas de peso (`<500 g`, `500–1000 g`, `>1000 g`), salvando a coluna de fold no manifesto limpo.
 - [ ] **Pré-processamento Clássico em OpenCV (REQ-03):** Pipeline configurável com redimensionamento preservando razão de aspecto (*letterbox* / fator de escala conhecido), suavização preservadora de bordas (Filtro Bilateral / Mediana) e normalização de iluminação local via CLAHE no canal `L` (CIE Lab).
 - [ ] **Segmentação Anti-Leakage da Ave (REQ-04):** Isolar a silhueta da ave separando-a da cama de palha, balde plástico branco e removendo obrigatoriamente o visor LCD e prato da balança SF-400 via limiarização multi-espaço (CIE Lab / HSV / Otsu / adaptativa), morfologia matemática, componente conexo dominante e refinamento de contorno.
 - [ ] **Extração de Descritores Morfométricos, Cromáticos e Ópticos (REQ-05):** Extrair exclusivamente da máscara segmentada da ave os atributos geométricos (área, perímetro, eixos maior/menor da elipse, excentricidade, área convexa, solidez, circularidade), cromáticos invariantes à escala (razão penugem amarela vs. plumagem branca, estatísticas Lab/HSV) e ópticos EXIF (`focal_length_mm`, `zoom_multiple`, área normalizada $A_{px} / (f_{mm} \cdot \text{zoom})^2$).
@@ -98,4 +97,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-11-20 after ingest-docs merge (`docs/`)*
+*Last updated: 2026-11-22 after Phase 1*

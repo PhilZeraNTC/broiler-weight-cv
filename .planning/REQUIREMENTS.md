@@ -9,8 +9,8 @@ Requirements for the MVP release (code freeze 2026-11-28, pitch 2026-11-30). Eac
 
 ### Data Curation & Forensic Manifest
 
-- [ ] **DATA-01** *(PRD REQ-01)*: User can run a deterministic Python ingestor (pinned to Python 3.12 via `uv`) over `data/raw/Broiler weights of Cobb Avian/` following Audit §9 verbatim — recursive level-2 leaf crawl (`171/173`, `190/191`, `190/193`), folder suffix sanitization (`1340_`), CP866 mojibake reversal (`547/`, `562/`), Eastern-Arabic digit normalization (`٠-٩`), `capture_dt` reconstruction (filename or `mtime - 14401 s`), EXIF metadata extraction (`Orientation` `274`, `FocalLength` `37386`, Xiaomi tag `39321` `zoomMultiple`), quarantine of 13 multi-bird (`417`, `757`, `823`, `1520`) + 2 severe mislabel (`1351`, `1465`) images, and `367` → `267 g` correction — persisting `data/processed/manifest_clean.parquet` (1,738 images, 160 unique weights, 188 sessions), `data/processed/manifest_quarantine.parquet` (15 images), and `models/dataset_audit_summary.json`.
-- [ ] **DATA-02** *(PRD REQ-02)*: User gets reproducible, leak-free 5-fold `StratifiedGroupKFold` partitions grouped strictly by `session_id` (sequential captures within `folder_chain` separated by `≤ 10 min`) and stratified by weight band (`<500 g`, `500–1000 g`, `>1000 g`), guaranteeing zero session overlap across folds and balanced heavy-bird (`>1000 g`) representation persisted in `manifest_clean.parquet`.
+- [x] **DATA-01** *(PRD REQ-01)*: User can run a deterministic Python ingestor (pinned to Python 3.12 via `uv`) over `data/raw/Broiler weights of Cobb Avian/` following Audit §9 verbatim — recursive level-2 leaf crawl (`171/173`, `190/191`, `190/193`), folder suffix sanitization (`1340_`), CP866 mojibake reversal (`547/`, `562/`), Eastern-Arabic digit normalization (`٠-٩`), `capture_dt` reconstruction (filename or `mtime - 14401 s`), EXIF metadata extraction (`Orientation` `274`, `FocalLength` `37386`, Xiaomi tag `39321` `zoomMultiple`), quarantine of 13 multi-bird (`417`, `757`, `823`, `1520`) + 2 severe mislabel (`1351`, `1465`) images, and `367` → `267 g` correction — persisting `data/processed/manifest_clean.parquet` (1,738 images, 160 unique weights, 188 sessions), `data/processed/manifest_quarantine.parquet` (15 images), and `models/dataset_audit_summary.json`.
+- [x] **DATA-02** *(PRD REQ-02)*: User gets reproducible, leak-free 5-fold `StratifiedGroupKFold` partitions grouped strictly by `session_id` (sequential captures within `folder_chain` separated by `≤ 10 min`) and stratified by weight band (`<500 g`, `500–1000 g`, `>1000 g`), guaranteeing zero session overlap across folds and balanced heavy-bird (`>1000 g`) representation persisted in `manifest_clean.parquet`.
 
 ### Classical PDI Engine & Watershed
 
@@ -72,8 +72,8 @@ Which phases cover which requirements. Populated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| DATA-01 | Phase 1 | Pending |
-| DATA-02 | Phase 1 | Pending |
+| DATA-01 | Phase 1 | Complete |
+| DATA-02 | Phase 1 | Complete |
 | PDI-01 | Phase 2 | Pending |
 | PDI-02 | Phase 2 | Pending |
 | PDI-03 | Phase 2 | Pending |
@@ -89,6 +89,7 @@ Which phases cover which requirements. Populated during roadmap creation.
 | WEB-05 | Phase 4 | Pending |
 
 **Coverage:**
+
 - v1 requirements: 15 total
 - Mapped to phases: 15 mapped
 - Unmapped: 0 unmapped
