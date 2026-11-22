@@ -53,7 +53,7 @@ Decimal phases appear between their surrounding integers in numeric order.
   4. Every single-bird pipeline execution emits all 4 inspection "X-Ray" artifacts (EXIF-oriented original, CLAHE-preprocessed image, clean binary mask without LCD, and refined contour + fitted ellipse/axes overlay) alongside a SHA-256 `PDIConfig` hash, completing on a native `4080×1840` image comfortably within the `< 500 ms` CPU budget.
   5. The dedicated Marker-based Watershed pipeline (red-feeder chromatic pre-suppression, Euclidean Distance Transform, Gaussian smoothing, scale-adaptive `h_maxima`/`peak_local_max`, and `skimage.segmentation.watershed`) separates touching birds across all `13` quarantined multi-bird images (`417`, `757`, `823`, `1520`) and arbitrary custom uploads, returning basin/boundary maps, accurate bird counts, per-bird pixel areas, and per-instance mask-gated features for illustrative individual weight inference.
 
-**Plans**: 2/4 plans executed
+**Plans**: 3/4 plans executed
 **Wave 1**
 
 - [x] 02-01-PLAN.md — Frozen PDIConfig, aspect-preserving EXIF-first working loader, Bilateral/Lab-CLAHE preprocessing, rotation-invariant SF-400 LCD suppressor & 3-scenario classical single-bird segmentation
@@ -64,7 +64,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 
 **Wave 3** *(blocked on Wave 2 completion)*
 
-- [ ] 02-03-PLAN.md — Isolated classical Marker-based Watershed multi-bird separation (bbox-cropped h_maxima, per-instance 49 features, 4 visual stages, 13-image audit) & backend/app/pdi barrel
+- [x] 02-03-PLAN.md — Isolated classical Marker-based Watershed multi-bird separation (bbox-cropped h_maxima, per-instance 49 features, 4 visual stages, 13-image audit) & backend/app/pdi barrel
 
 **Wave 4** *(blocked on Wave 3 completion)*
 
@@ -110,6 +110,6 @@ Phases execute in numeric order: 1 → 2 → 3 → 4
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. Forensic Data Curation & Anti-Leakage Split | 3/3 | Complete    | 2026-11-22 |
-| 2. Classical PDI Engine, Optical Calibration & Watershed | 2/4 | In Progress|  |
+| 2. Classical PDI Engine, Optical Calibration & Watershed | 3/4 | In Progress|  |
 | 3. Tabular Regression, Optical Ablation & Production Bundling | 0/0 | Not started | - |
 | 4. FastAPI Local Backend & Interactive Pitch Web Studio | 0/0 | Not started | - |
