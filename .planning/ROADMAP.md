@@ -53,7 +53,22 @@ Decimal phases appear between their surrounding integers in numeric order.
   4. Every single-bird pipeline execution emits all 4 inspection "X-Ray" artifacts (EXIF-oriented original, CLAHE-preprocessed image, clean binary mask without LCD, and refined contour + fitted ellipse/axes overlay) alongside a SHA-256 `PDIConfig` hash, completing on a native `4080×1840` image comfortably within the `< 500 ms` CPU budget.
   5. The dedicated Marker-based Watershed pipeline (red-feeder chromatic pre-suppression, Euclidean Distance Transform, Gaussian smoothing, scale-adaptive `h_maxima`/`peak_local_max`, and `skimage.segmentation.watershed`) separates touching birds across all `13` quarantined multi-bird images (`417`, `757`, `823`, `1520`) and arbitrary custom uploads, returning basin/boundary maps, accurate bird counts, per-bird pixel areas, and per-instance mask-gated features for illustrative individual weight inference.
 
-**Plans**: TBD
+**Plans**: 4 plans
+**Wave 1**
+
+- [ ] 02-01-PLAN.md — Frozen PDIConfig, aspect-preserving EXIF-first working loader, Bilateral/Lab-CLAHE preprocessing, rotation-invariant SF-400 LCD suppressor & 3-scenario classical single-bird segmentation
+
+**Wave 2** *(blocked on Wave 1 completion)*
+
+- [ ] 02-02-PLAN.md — Strictly mask-gated 49-feature extractor (PROIBIÇÃO 2 0.0-diff invariance + area_px/z² calibration), 4-stage X-Ray renderer & unified run_single_bird_pdi() pipeline
+
+**Wave 3** *(blocked on Wave 2 completion)*
+
+- [ ] 02-03-PLAN.md — Isolated classical Marker-based Watershed multi-bird separation (bbox-cropped h_maxima, per-instance 49 features, 4 visual stages, 13-image audit) & backend/app/pdi barrel
+
+**Wave 4** *(blocked on Wave 3 completion)*
+
+- [ ] 02-04-PLAN.md — Capped 4-worker batch extraction CLI (extract_features.py), materialized 1,738x60 features_clean.parquet & aggregate models/pdi_calibration_audit.json
 
 ### Phase 3: Tabular Regression, Optical Ablation & Production Bundling
 
