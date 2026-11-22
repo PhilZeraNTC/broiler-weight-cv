@@ -16,11 +16,14 @@ from pathlib import Path
 
 import cv2
 import numpy as np
+import pandas as pd
 import pytest
 from PIL import Image
 from scipy import ndimage as ndi
 from skimage.morphology import h_maxima
 
+import backend.app.pdi as pdi_pkg
+from backend.app.config import QUARANTINE_MANIFEST_PATH, RAW_DATASET_DIR
 from backend.app.pdi.config import PDIConfig
 from backend.app.pdi.features import BANNED_FEATURE_COLUMNS, FEATURE_COLUMNS
 from backend.app.pdi.io_exif import OpticalOverride
@@ -473,3 +476,157 @@ def test_watershed_module_contains_zero_folder_name_hardcoding() -> None:
         assert folder_token not in watershed_src, (
             f"Hardcoded folder token {folder_token} is prohibited inside watershed.py"
         )
+
+
+def test_pdi_package_barrel_exports_complete_sorted_public_api() -> None:
+    from backend.app.pdi import (
+        FEATURE_COLUMNS as BARREL_FEATURE_COLUMNS,
+    )
+    from backend.app.pdi import (
+        PDIConfig as BarrelPDIConfig,
+    )
+    from backend.app.pdi import (
+        PDIResult,
+        run_single_bird_pdi,
+    )
+    from backend.app.pdi import (
+        WatershedResult as BarrelWatershedResult,
+    )
+    from backend.app.pdi import (
+        run_watershed_pdi as barrel_run_watershed_pdi,
+    )
+
+    assert BarrelPDIConfig is PDIConfig
+    assert BarrelWatershedResult is WatershedResult
+    assert barrel_run_watershed_pdi is run_watershed_pdi
+    assert BARREL_FEATURE_COLUMNS == FEATURE_COLUMNS
+    assert PDIResult is not None
+    assert callable(run_single_bird_pdi)
+
+    assert pdi_pkg.__all__ == sorted(pdi_pkg.__all__)
+    required_exports = {
+        "BANNED_FEATURE_COLUMNS",
+        "CHROMATIC_TEXTURE_FEATURE_COLUMNS",
+        "ExifMetadata",
+        "FEATURE_COLUMNS",
+        "LcdSuppressionResult",
+        "MORPHOMETRIC_FEATURE_COLUMNS",
+        "OPTICAL_FEATURE_COLUMNS",
+        "OpticalContext",
+        "OpticalOverride",
+        "PDIConfig",
+        "PDIResult",
+        "PreprocessedFrame",
+        "SingleBirdSegmentation",
+        "WIDE_FOCAL_THRESHOLD_MM",
+        "WatershedInstance",
+        "WatershedResult",
+        "WatershedVisuals",
+        "WorkingImage",
+        "XRayArtifacts",
+        "classify_lens",
+        "classify_scene_border_ring",
+        "extract_mask_gated_features",
+        "fit_ellipse_safe",
+        "load_oriented_rgb",
+        "load_working_rgb",
+        "preprocess_working_rgb",
+        "read_exif_metadata",
+        "render_xray_artifacts",
+        "resolve_optical_context",
+        "run_single_bird_pdi",
+        "run_watershed_pdi",
+        "segment_single_bird",
+        "suppress_lcd_and_platter",
+    }
+    assert required_exports.issubset(set(pdi_pkg.__all__))
+    for symbol in pdi_pkg.__all__:
+        assert hasattr(pdi_pkg, symbol), f"Missing barrel export {symbol!r}"
+
+
+def test_real_13_quarantined_multi_bird_images_read_only_watershed_audit() -> None:
+    """Read-only audit across all 13 quarantined multi-bird scenes (PROIBIÇÃO 4 compliant)."""
+    assert QUARANTINE_MANIFEST_PATH.is_file(), "manifest_quarantine.parquet must be materialized"
+    assert RAW_DATASET_DIR.is_dir(), "RAW_DATASET_DIR must exist for read-only multi-bird audit"
+
+    quarantine_df = pd.read_parquet(QUARANTINE_MANIFEST_PATH)
+    multi_bird = quarantine_df.loc[quarantine_df["quarantine_reason"] == "multi_bird"]
+    assert len(multi_bird) == 13
+    assert multi_bird["folder_chain"].value_counts().to_dict() == {
+        "417": 4,
+        "757": 1,
+        "823": 4,
+        "1520": 4,
+    }
+
+    gt_counts: dict[str, int] = {"417": 2, "757": 2, "823": 4, "1520": 2}
+    canonical_root = RAW_DATASET_DIR.resolve()
+    cfg = PDIConfig()
+    expected_hash = cfg.config_hash()
+
+    exact_matches = 0
+    within_one = 0
+    folder_417_checked = 0
+
+    for row in multi_bird.itertuples(index=False):
+        rel_path_str = str(row.rel_path)
+        assert ".." not in Path(rel_path_str).parts
+        img_path = (RAW_DATASET_DIR / rel_path_str).resolve()
+        assert img_path.is_relative_to(canonical_root)
+        assert img_path.is_file()
+
+        res = run_watershed_pdi(img_path, config=cfg, return_visuals=True)
+        folder = str(row.folder_chain)
+        expected_n = gt_counts[folder]
+
+        assert res.h_rel == pytest.approx(0.20)
+        assert res.min_distance_rel == pytest.approx(0.85)
+        assert res.min_area_ratio == pytest.approx(0.10)
+        assert res.pdi_config_hash == expected_hash
+        assert res.bird_count == len(res.instances)
+        assert res.latency_ms < 350.0, (
+            f"Watershed latency {res.latency_ms:.1f} ms exceeded 350 ms budget (folder={folder})"
+        )
+
+        if res.bird_count == expected_n:
+            exact_matches += 1
+        if abs(res.bird_count - expected_n) <= 1:
+            within_one += 1
+
+        if folder == "417":
+            folder_417_checked += 1
+            assert res.red_feeder_excluded_px > 0, (
+                "Expected red-feeder pre-suppression to trigger on folder 417 shot"
+            )
+            assert res.bird_count == 2, (
+                f"Expected exact bird_count == 2 on folder 417 shot, got {res.bird_count}"
+            )
+
+        prev_area: int | None = None
+        for idx, inst in enumerate(res.instances, start=1):
+            assert inst.instance_id == idx
+            assert tuple(inst.features.keys()) == FEATURE_COLUMNS
+            assert all(math.isfinite(v) for v in inst.features.values())
+            assert inst.area_px > 0.0
+            assert inst.area_optical_norm > 0.0
+            if prev_area is not None:
+                assert inst.area_work_px <= prev_area
+            prev_area = inst.area_work_px
+
+        assert res.visuals is not None
+        assert res.visuals.total_b64_bytes < 300_000
+        for b64_str, expected_fmt, expected_mode in (
+            (res.visuals.stage1_original_b64, "JPEG", "RGB"),
+            (res.visuals.stage2_union_mask_b64, "PNG", "L"),
+            (res.visuals.stage3_distance_peaks_b64, "JPEG", "RGB"),
+            (res.visuals.stage4_color_basins_b64, "JPEG", "RGB"),
+        ):
+            im = _decode_b64_image(b64_str)
+            assert im.format == expected_fmt
+            assert im.mode == expected_mode
+            assert max(im.size) <= cfg.xray_display_long_edge
+
+    assert folder_417_checked == 4
+    assert exact_matches >= 8, f"Expected >= 8/13 exact multi-bird counts, got {exact_matches}/13"
+    assert within_one >= 11, f"Expected >= 11/13 counts within +-1, got {within_one}/13"
+
