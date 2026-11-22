@@ -3,16 +3,16 @@ gsd_state_version: "1.0"
 current_phase: 2
 current_phase_name: Classical PDI Engine, Optical Calibration & Watershed
 status: executing
-stopped_at: Phase 2 context gathered
-last_updated: "2026-11-22T14:18:35.355Z"
+stopped_at: Completed 02-01
+last_updated: "2026-11-22T14:32:01.221Z"
 last_activity: 2026-11-22
-last_activity_desc: Phase 01 complete, transitioned to Phase 2
-state_head: 45ab2597712d36d29408c33e503142cad4f5cd4c
+last_activity_desc: Phase 2 execution started
+state_head: ef5ca5af0d0e2d85e0cb009c7ea22b7787d8dff0
 progress:
   total_phases: 4
   completed_phases: 1
   total_plans: 7
-  completed_plans: 3
+  completed_plans: 4
   percent: 25
 ---
 
@@ -23,14 +23,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-11-20)
 
 **Core value:** Estimar o peso vivo individual de frangos de corte de forma precisa, auditada e 100% interpretável usando apenas PDI clássico calibrado por óptica EXIF — sem deep learning e com zero vazamento do visor LCD — em uma demo web local (`< 500 ms`).
-**Current focus:** Phase 1 — Forensic Data Curation & Anti-Leakage Split
+**Current focus:** Phase 2 — Classical PDI Engine, Optical Calibration & Watershed
 
 ## Current Position
 
-Phase: 2 (Classical PDI Engine, Optical Calibration & Watershed) — READY TO EXECUTE
-Plan: Not started
-Status: Ready to execute
-Last activity: 2026-11-22 — Phase 01 complete, transitioned to Phase 2
+Phase: 2 (Classical PDI Engine, Optical Calibration & Watershed) — EXECUTING
+Plan: 1 of 4
+Status: Executing Phase 2
+Last activity: 2026-11-22 — Phase 2 execution started
 
 Progress: [███░░░░░░░] 25%
 
@@ -87,6 +87,6 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-11-22T13:08:31.849Z
-Stopped at: Phase 2 context gathered
-Resume file: .planning/phases/02-classical-pdi-engine-optical-calibration-watershed/02-CONTEXT.md
+Last session: 2026-11-22T14:32:01.172Z
+Stopped at: Completed 02-01
+Resume file: .planning/phases/02-classical-pdi-engine-optical-calibration-watershed/02-01-SUMMARY.md
