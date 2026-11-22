@@ -28,6 +28,12 @@ from backend.app.pdi.io_exif import (
 )
 from backend.app.pdi.lcd_suppression import suppress_lcd_and_platter
 from backend.app.pdi.preprocess import preprocess_working_rgb
+from backend.app.pdi.segmentation import (
+    _select_dominant_component,
+    classify_scene_border_ring,
+    fit_ellipse_safe,
+    segment_single_bird,
+)
 from backend.tests.conftest import make_synthetic_jpeg_bytes, make_synthetic_png_bytes
 
 
@@ -405,3 +411,246 @@ def test_suppress_lcd_and_platter_has_zero_false_positives_on_clean_white_bucket
     assert res.lcd_core_count == 0
     assert res.lcd_excluded_px == 0
     assert int(np.count_nonzero(res.exclusion_mask)) == 0
+
+
+def _circular_angle_diff_deg_mod180(a: float, b: float) -> float:
+    diff = abs((a - b) % 180.0)
+    return min(diff, 180.0 - diff)
+
+
+def _make_synthetic_white_on_white_bucket_scene(
+    *,
+    width: int = 768,
+    height: int = 346,
+    seed: int = 31,
+) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """Synthesize Scenario B white-on-white heavy broiler inside a smooth white plastic bucket.
+
+    Returns ``(rgb_work, bird_gt_mask, outer_wall_gt_mask)``.
+    """
+    rng = np.random.default_rng(seed)
+    rgb = np.full((height, width, 3), (236, 237, 239), dtype=np.uint8)
+
+    # Outer smooth white plastic bucket walls occupy the outer perimeter.
+    wall_gt = np.zeros((height, width), dtype=np.uint8)
+    bh, bw = int(round(height * 0.13)), int(round(width * 0.13))
+    wall_gt[:bh, :] = 255
+    wall_gt[height - bh :, :] = 255
+    wall_gt[:, :bw] = 255
+    wall_gt[:, width - bw :] = 255
+
+    # Slightly shaded rounded bucket floor interior with subtle straw flecks.
+    cx, cy = width // 2, height // 2
+    floor_mask = np.zeros((height, width), dtype=np.uint8)
+    cv2.ellipse(floor_mask, (cx, cy), (210, 118), 0, 0, 360, 255, -1)
+    rgb[floor_mask > 0] = (176, 173, 168)
+
+    # Contact-shadow moat immediately around the white broiler (Black-Hat barrier).
+    cv2.ellipse(rgb, (cx, cy), (126, 86), 0, 0, 360, (108, 106, 102), -1)
+
+    # White-on-white heavy broiler silhouette with subtle warm feather texture.
+    bird_gt = np.zeros((height, width), dtype=np.uint8)
+    cv2.ellipse(bird_gt, (cx, cy), (112, 74), 0, 0, 360, 255, -1)
+    rgb[bird_gt > 0] = (232, 229, 218)
+
+    # Add feather micro-texture strictly inside the bird silhouette.
+    tex = rng.integers(-18, 19, size=(height, width, 3), dtype=np.int16)
+    rgb = np.where(
+        bird_gt[:, :, None] > 0,
+        np.clip(rgb.astype(np.int16) + tex, 0, 255).astype(np.uint8),
+        rgb,
+    )
+    # Add small pink comb patch near bird front.
+    cv2.circle(rgb, (cx + 85, cy), 12, (215, 115, 125), -1)
+    cv2.circle(bird_gt, (cx + 85, cy), 12, 255, -1)
+    return rgb, bird_gt, wall_gt
+
+
+def test_classify_scene_border_ring_separates_bucket_from_straw() -> None:
+    cfg = PDIConfig()
+
+    bucket_rgb, _, _ = _make_synthetic_white_on_white_bucket_scene()
+    bucket_frame = preprocess_working_rgb(bucket_rgb, cfg)
+    scene_b, is_bucket_b = classify_scene_border_ring(bucket_frame, cfg)
+    assert scene_b == "bucket_dorsal"
+    assert is_bucket_b is True
+
+    straw_rgb, _, _ = _make_synthetic_scale_scene()
+    straw_frame = preprocess_working_rgb(straw_rgb, cfg)
+    scene_a, is_bucket_a = classify_scene_border_ring(straw_frame, cfg)
+    assert scene_a == "scale_or_litter"
+    assert is_bucket_a is False
+
+
+def test_segment_single_bird_scenario_b_white_on_white_bucket_peels_walls() -> None:
+    cfg = PDIConfig()
+    rgb, bird_gt, wall_gt = _make_synthetic_white_on_white_bucket_scene()
+    frame = preprocess_working_rgb(rgb, cfg)
+    seg = segment_single_bird(frame, cfg)
+
+    assert seg.scene_type == "bucket_dorsal"
+    assert seg.scene_is_bucket is True
+    assert seg.segmentation_fallback is False
+    assert seg.lcd_excluded_px == 0
+    assert seg.lcd_core_count == 0
+    assert cfg.min_valid_area_frac <= seg.mask_area_frac <= cfg.max_valid_area_frac
+
+    # Smooth outer bucket walls must be peeled out completely.
+    wall_bleed = int(np.count_nonzero((seg.bird_mask > 0) & (wall_gt > 0)))
+    assert wall_bleed == 0
+
+    inter = int(np.count_nonzero((seg.bird_mask > 0) & (bird_gt > 0)))
+    union = int(np.count_nonzero((seg.bird_mask > 0) | (bird_gt > 0)))
+    assert inter / max(union, 1) >= 0.70
+
+
+def test_segment_single_bird_scenario_a_touching_platter_has_zero_lcd_leakage() -> None:
+    """PDI-02 (adjacency): Bird touching SF-400 platter never leaks LCD pixels into bird_mask."""
+    cfg = PDIConfig()
+    # Place bird directly adjacent/touching the SF-400 white plastic housing/platter edge.
+    rgb, lcd_gt, bird_gt = _make_synthetic_scale_scene(
+        lcd_center=(230, 173),
+        lcd_size=(70, 32),
+        housing_offset=(35, 0),
+        housing_size=(190, 145),
+        bird_center=(430, 173),
+        bird_axes=(95, 64),
+    )
+    # Paint a thin bright white leg/platter bridge connecting housing to bird.
+    cv2.line(rgb, (350, 173), (365, 173), (226, 230, 234), 4)
+
+    frame = preprocess_working_rgb(rgb, cfg)
+    seg = segment_single_bird(frame, cfg)
+
+    assert seg.scene_type == "scale_or_litter"
+    assert seg.scene_is_bucket is False
+    assert seg.lcd_core_count >= 1
+    assert seg.lcd_excluded_px > 0
+    assert seg.segmentation_fallback is False
+    assert cfg.min_valid_area_frac <= seg.mask_area_frac <= cfg.max_valid_area_frac
+
+    # PROIBIÇÃO 2 hard check: zero overlap between bird_mask and ground-truth LCD bezel.
+    assert int(np.count_nonzero((seg.bird_mask > 0) & (lcd_gt > 0))) == 0
+
+    inter = int(np.count_nonzero((seg.bird_mask > 0) & (bird_gt > 0)))
+    bird_area = int(np.count_nonzero(bird_gt))
+    assert inter / max(bird_area, 1) >= 0.75
+
+
+@pytest.mark.parametrize("angle_true", [30.0, 150.0])
+def test_fit_ellipse_safe_preserves_major_axis_orientation_and_iou(angle_true: float) -> None:
+    canvas = np.zeros((320, 320), dtype=np.uint8)
+    # Major diameter = 120, minor diameter = 40 -> semi-axes (60, 20) along angle_true.
+    cv2.ellipse(canvas, (160, 160), (60, 20), angle_true, 0, 360, 255, -1)
+    contours, _ = cv2.findContours(canvas, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    cnt = max(contours, key=cv2.contourArea)
+
+    ellipse, used_fallback = fit_ellipse_safe(cnt)
+    (cx, cy), (major, minor), angle_deg = ellipse
+
+    assert used_fallback is False
+    assert math.isfinite(cx) and math.isfinite(cy)
+    assert major > minor > 0.0
+    assert 0.0 <= angle_deg < 180.0
+    assert _circular_angle_diff_deg_mod180(angle_deg, angle_true) < 5.0
+
+    rendered = np.zeros_like(canvas)
+    cv2.ellipse(rendered, ellipse, 255, -1)
+    inter = int(np.count_nonzero((canvas > 0) & (rendered > 0)))
+    union = int(np.count_nonzero((canvas > 0) | (rendered > 0)))
+    assert inter / max(union, 1) >= 0.90
+
+
+def test_fit_ellipse_safe_degenerate_contours_and_min_area_rect_alignment() -> None:
+    # 1. 3-point triangle -> minAreaRect fallback
+    tri = np.array([[[10, 10]], [[40, 10]], [[25, 35]]], dtype=np.int32)
+    ell_tri, fb_tri = fit_ellipse_safe(tri)
+    assert fb_tri is True
+    assert ell_tri[1][0] >= ell_tri[1][1] >= 0.0
+    assert 0.0 <= ell_tri[2] < 180.0
+
+    # 2. 4-vertex elongated rotated rectangle tilted at 30 deg -> verifies +90 deg alignment
+    angle_true = 30.0
+    box = cv2.boxPoints(((160.0, 160.0), (120.0, 40.0), angle_true))
+    cnt4 = np.int32(np.round(box)).reshape(-1, 1, 2)
+    ell4, fb4 = fit_ellipse_safe(cnt4)
+    assert fb4 is True
+    assert ell4[1][0] > ell4[1][1] > 0.0
+    assert 0.0 <= ell4[2] < 180.0
+    assert _circular_angle_diff_deg_mod180(ell4[2], angle_true) < 5.0
+
+    gt_ell = np.zeros((320, 320), dtype=np.uint8)
+    cv2.ellipse(gt_ell, (160, 160), (60, 20), angle_true, 0, 360, 255, -1)
+    rec_ell = np.zeros_like(gt_ell)
+    cv2.ellipse(rec_ell, ell4, 255, -1)
+    inter = int(np.count_nonzero((gt_ell > 0) & (rec_ell > 0)))
+    union = int(np.count_nonzero((gt_ell > 0) | (rec_ell > 0)))
+    assert inter / max(union, 1) >= 0.90
+
+    # 3. Collinear 10-point contour -> minAreaRect fallback without cv2.error
+    collinear = np.array([[[10 + i * 5, 50]] for i in range(10)], dtype=np.int32)
+    ell_col, fb_col = fit_ellipse_safe(collinear)
+    assert fb_col is True
+    assert all(math.isfinite(v) for v in (*ell_col[0], *ell_col[1], ell_col[2]))
+    assert ell_col[1][0] >= ell_col[1][1] >= 0.0
+    assert 0.0 <= ell_col[2] < 180.0
+
+    # 4. Tiny (<10 px^2) 6-point contour -> minAreaRect fallback
+    tiny = np.array(
+        [[[10, 10]], [[11, 10]], [[12, 11]], [[11, 12]], [[10, 12]], [[9, 11]]],
+        dtype=np.int32,
+    )
+    ell_tiny, fb_tiny = fit_ellipse_safe(tiny)
+    assert fb_tiny is True
+    assert ell_tiny[1][0] >= ell_tiny[1][1] >= 0.0
+    assert 0.0 <= ell_tiny[2] < 180.0
+
+
+def test_segment_single_bird_empty_uniform_frame_triggers_safe_fallback() -> None:
+    """PDI-02 (empty): Uniform frame never crashes and returns valid fallback mask/ellipse."""
+    cfg = PDIConfig()
+    uniform_rgb = np.full((346, 768, 3), 128, dtype=np.uint8)
+    frame = preprocess_working_rgb(uniform_rgb, cfg)
+    seg = segment_single_bird(frame, cfg)
+
+    assert seg.segmentation_fallback is True
+    assert seg.mask_area_frac > 0.0
+    assert int(np.count_nonzero(seg.bird_mask)) > 0
+    assert seg.contour.shape[0] >= 3
+    (cx, cy), (major, minor), angle_deg = seg.ellipse
+    assert all(math.isfinite(v) for v in (cx, cy, major, minor, angle_deg))
+    assert major >= minor > 0.0
+    assert 0.0 <= angle_deg < 180.0
+
+
+def test_segment_single_bird_deterministic_ordering_for_symmetric_candidates() -> None:
+    """PDI-02 (ordering): Equal-area, equal-centrality candidates resolve deterministically."""
+    h, w = 200, 400
+    yy, xx = np.ogrid[:h, :w]
+    cy_mid, cx_mid = (h - 1) / 2.0, (w - 1) / 2.0
+    prior = np.exp(
+        -0.5 * (((yy - cy_mid) / (0.35 * h)) ** 2 + ((xx - cx_mid) / (0.35 * w)) ** 2)
+    ).astype(np.float32)
+
+    # Two identical symmetric disks equidistant from image center (left vs right).
+    sym_mask = np.zeros((h, w), dtype=np.uint8)
+    cv2.circle(sym_mask, (120, 100), 30, 255, -1)
+    cv2.circle(sym_mask, (w - 1 - 120, 100), 30, 255, -1)
+
+    sel_a = _select_dominant_component(sym_mask, prior)
+    sel_b = _select_dominant_component(sym_mask, prior)
+    assert np.array_equal(sel_a, sel_b)
+    # Tie-breaker (-score, -area, cy, cx) deterministically chooses left blob (smaller cx).
+    ys, xs = np.nonzero(sel_a)
+    assert float(xs.mean()) < cx_mid
+
+    # End-to-end repeatability check on symmetric dual-blob synthetic straw image.
+    cfg = PDIConfig()
+    rgb = np.full((h, w, 3), (120, 92, 60), dtype=np.uint8)
+    cv2.circle(rgb, (120, 100), 34, (235, 210, 120), -1)
+    cv2.circle(rgb, (w - 1 - 120, 100), 34, (235, 210, 120), -1)
+    frame = preprocess_working_rgb(rgb, cfg)
+    seg_1 = segment_single_bird(frame, cfg)
+    seg_2 = segment_single_bird(frame, cfg)
+    assert np.array_equal(seg_1.bird_mask, seg_2.bird_mask)
+    assert seg_1.ellipse == seg_2.ellipse
