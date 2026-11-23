@@ -219,7 +219,9 @@ def load_oriented_rgb(source: Path | bytes) -> OrientedImage:
     """Extract EXIF metadata BEFORE applying ``ImageOps.exif_transpose().convert('RGB')``."""
     with _open_image_source(source) as im:
         metadata = _extract_exif_from_open_image(im)
-        oriented = ImageOps.exif_transpose(im).convert("RGB")
+        oriented = ImageOps.exif_transpose(im)
+        if oriented.mode != "RGB":
+            oriented = oriented.convert("RGB")
         rgb = np.asarray(oriented, dtype=np.uint8)
     return OrientedImage(rgb=rgb, metadata=metadata)
 
@@ -322,7 +324,9 @@ def load_working_rgb(
                     max(1, int(im.size[1] * draft_scale)),
                 )
                 im.draft("RGB", draft_box)
-        oriented = ImageOps.exif_transpose(im).convert("RGB")
+        oriented = ImageOps.exif_transpose(im)
+        if oriented.mode != "RGB":
+            oriented = oriented.convert("RGB")
         rgb = np.asarray(oriented, dtype=np.uint8)
 
     h0, w0 = rgb.shape[:2]

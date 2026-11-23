@@ -22,6 +22,7 @@ from backend.app.pdi.preprocess import PreprocessedFrame
 # (02-RESEARCH.md Spike 3: 672 non-bucket exclusions, 0 bucket false positives).
 _LCD_MAX_L = 105
 _LCD_MAX_CHROMA = 18.0
+_LCD_MAX_CHROMA_SQ = int(_LCD_MAX_CHROMA * _LCD_MAX_CHROMA)
 _LCD_MIN_AREA_FRAC = 0.0005
 _LCD_MAX_AREA_FRAC = 0.08
 _LCD_MIN_ASPECT = 1.25
@@ -31,6 +32,7 @@ _LCD_MIN_SOLIDITY = 0.72
 
 _HOUSING_MIN_L = 155
 _HOUSING_MAX_CHROMA = 12.0
+_HOUSING_MAX_CHROMA_SQ = int(_HOUSING_MAX_CHROMA * _HOUSING_MAX_CHROMA)
 _HOUSING_MAX_B = 134
 _HOUSING_MAX_GRAD = 65.0
 
@@ -61,10 +63,14 @@ def suppress_lcd_and_platter(
     l_ch = frame.lab[:, :, 0]
     a_ch = frame.lab[:, :, 1]
     b_ch = frame.lab[:, :, 2]
-    chroma = np.hypot(a_ch.astype(np.float32) - 128.0, b_ch.astype(np.float32) - 128.0)
+    da = a_ch.astype(np.int32) - 128
+    db = b_ch.astype(np.int32) - 128
+    chroma_sq = da * da + db * db
 
-    dark_neutral = np.where((l_ch < _LCD_MAX_L) & (chroma < _LCD_MAX_CHROMA), 255, 0).astype(
-        np.uint8
+    dark_neutral = np.where(
+        (l_ch < _LCD_MAX_L) & (chroma_sq < _LCD_MAX_CHROMA_SQ),
+        np.uint8(255),
+        np.uint8(0),
     )
     k_open = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (3, 3))
     k_close = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (5, 5))
@@ -117,12 +123,12 @@ def suppress_lcd_and_platter(
 
     housing_cand = np.where(
         (l_ch >= _HOUSING_MIN_L)
-        & (chroma <= _HOUSING_MAX_CHROMA)
+        & (chroma_sq <= _HOUSING_MAX_CHROMA_SQ)
         & (b_ch <= _HOUSING_MAX_B)
         & (frame.grad_l_clahe_blur <= _HOUSING_MAX_GRAD),
-        1,
-        0,
-    ).astype(np.uint8)
+        np.uint8(1),
+        np.uint8(0),
+    )
 
     k_halo = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (17, 17))
     halo = cv2.dilate(bezel_mask, k_halo) > 0
@@ -135,7 +141,7 @@ def suppress_lcd_and_platter(
     else:
         housing_mask = np.zeros((h, w), dtype=bool)
 
-    exclusion_mask = np.where((bezel_mask > 0) | housing_mask, 255, 0).astype(np.uint8)
+    exclusion_mask = np.where((bezel_mask > 0) | housing_mask, np.uint8(255), np.uint8(0))
     return LcdSuppressionResult(
         exclusion_mask=exclusion_mask,
         lcd_core_count=lcd_core_count,

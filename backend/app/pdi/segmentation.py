@@ -25,7 +25,6 @@ from typing import Literal
 
 import cv2
 import numpy as np
-from scipy import ndimage as ndi
 
 from backend.app.pdi.config import PDIConfig
 from backend.app.pdi.lcd_suppression import LcdSuppressionResult, suppress_lcd_and_platter
@@ -81,6 +80,38 @@ def _build_center_prior(h: int, w: int) -> np.ndarray:
     sy = max(1.0, 0.35 * h)
     sx = max(1.0, 0.35 * w)
     return np.exp(-0.5 * (((yy - cy) / sy) ** 2 + ((xx - cx) / sx) ** 2)).astype(np.float32)
+
+
+def _fill_holes_u8(binary_u8: np.ndarray) -> np.ndarray:
+    """Fill all enclosed binary holes via external contour flood fill (bit-identical to SciPy)."""
+    contours, _ = cv2.findContours(binary_u8, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)
+    out = np.zeros_like(binary_u8)
+    if contours:
+        cv2.drawContours(out, contours, -1, 255, thickness=cv2.FILLED)
+    return out
+
+
+def _percentile_u8(values_u8: np.ndarray, percentiles: tuple[float, ...]) -> tuple[float, ...]:
+    """Compute exact linear-interpolated percentiles on 1D ``uint8`` values via histogram."""
+    n = values_u8.size
+    if n == 0:
+        return tuple(0.0 for _ in percentiles)
+    cdf = np.cumsum(np.bincount(values_u8, minlength=256))
+    results: list[float] = []
+    for p in percentiles:
+        pos = (p / 100.0) * float(n - 1)
+        lo_i = int(math.floor(pos))
+        hi_i = int(math.ceil(pos))
+        frac = pos - lo_i
+        v_lo = float(np.searchsorted(cdf, lo_i + 1))
+        v_hi = float(np.searchsorted(cdf, hi_i + 1))
+        results.append(v_lo + frac * (v_hi - v_lo))
+    return tuple(results)
+
+
+def _median_u8(values_u8: np.ndarray) -> float:
+    """Compute exact median on 1D ``uint8`` values via histogram."""
+    return _percentile_u8(values_u8, (50.0,))[0]
 
 
 def _otsu_threshold_masked(values: np.ndarray) -> float:
@@ -155,6 +186,17 @@ def fit_ellipse_safe(contour: np.ndarray) -> tuple[EllipseTuple, bool]:
     return _normalize_ellipse_axes(rcx, rcy, rw, rh, rangle), True
 
 
+def _smooth_white_patch(
+    lab_patch: np.ndarray,
+    grad_patch: np.ndarray,
+) -> np.ndarray:
+    """Compute exact smooth-white mask on a border patch without full-frame float32 work."""
+    l_ch = lab_patch[:, :, 0]
+    a_d = lab_patch[:, :, 1].astype(np.float32) - 128.0
+    b_d = lab_patch[:, :, 2].astype(np.float32) - 128.0
+    return (l_ch >= 140) & (np.hypot(a_d, b_d) <= 22.0) & (grad_patch <= 40.0)
+
+
 def classify_scene_border_ring(
     frame: PreprocessedFrame,
     config: PDIConfig,
@@ -163,26 +205,33 @@ def classify_scene_border_ring(
     h, w = frame.lab.shape[:2]
     ring, strips = _border_ring_and_strips(h, w, config.border_ring_frac)
 
-    l_ch = frame.lab[:, :, 0]
-    a_f = frame.lab[:, :, 1].astype(np.float32)
-    b_f = frame.lab[:, :, 2].astype(np.float32)
-    chroma = np.hypot(a_f - 128.0, b_f - 128.0)
+    l_ring = frame.lab[:, :, 0][ring]
+    a_ring = frame.lab[:, :, 1][ring].astype(np.float32) - 128.0
+    b_ring = frame.lab[:, :, 2][ring].astype(np.float32) - 128.0
+    g_ring = frame.grad_l[ring]
 
-    smooth_white = (l_ch >= 140) & (chroma <= 22.0) & (frame.grad_l <= 40.0)
-    ring_sw_frac = float(smooth_white[ring].mean())
-    ring_gmed = float(np.median(frame.grad_l[ring]))
+    ring_sw_frac = float(
+        ((l_ring >= 140) & (np.hypot(a_ring, b_ring) <= 22.0) & (g_ring <= 40.0)).mean()
+    )
+    if ring_sw_frac < config.bucket_smooth_white_min_frac:
+        return "scale_or_litter", False
+
+    ring_gmed = float(np.median(g_ring))
+    if ring_gmed > config.bucket_ring_grad_max:
+        return "scale_or_litter", False
+
     sides_sw = sum(
         1
         for row_sl, col_sl in strips
-        if float(smooth_white[row_sl, col_sl].mean()) >= 0.35
+        if float(
+            _smooth_white_patch(
+                frame.lab[row_sl, col_sl],
+                frame.grad_l[row_sl, col_sl],
+            ).mean()
+        )
+        >= 0.35
     )
-
-    is_bucket = (
-        ring_sw_frac >= config.bucket_smooth_white_min_frac
-        and ring_gmed <= config.bucket_ring_grad_max
-        and sides_sw >= config.bucket_min_white_sides
-    )
-    if is_bucket:
+    if sides_sw >= config.bucket_min_white_sides:
         return "bucket_dorsal", True
     return "scale_or_litter", False
 
@@ -205,7 +254,13 @@ def _select_dominant_component(
         area = int(stats[lbl, cv2.CC_STAT_AREA])
         if area <= 0:
             continue
-        mean_prior = float(np.mean(center_prior[labels == lbl], dtype=np.float64))
+        x = int(stats[lbl, cv2.CC_STAT_LEFT])
+        y = int(stats[lbl, cv2.CC_STAT_TOP])
+        bw = int(stats[lbl, cv2.CC_STAT_WIDTH])
+        bh = int(stats[lbl, cv2.CC_STAT_HEIGHT])
+        sub_labels = labels[y : y + bh, x : x + bw]
+        sub_prior = center_prior[y : y + bh, x : x + bw]
+        mean_prior = float(np.mean(sub_prior[sub_labels == lbl], dtype=np.float64))
         score = float(area) * (0.25 + 0.75 * mean_prior)
         cx = float(centroids[lbl, 0])
         cy = float(centroids[lbl, 1])
@@ -216,7 +271,13 @@ def _select_dominant_component(
 
     if best_label == 0:
         return np.zeros(binary_mask.shape[:2], dtype=np.uint8)
-    return np.where(labels == best_label, 255, 0).astype(np.uint8)
+    out = np.zeros(binary_mask.shape[:2], dtype=np.uint8)
+    bx = int(stats[best_label, cv2.CC_STAT_LEFT])
+    by = int(stats[best_label, cv2.CC_STAT_TOP])
+    bw = int(stats[best_label, cv2.CC_STAT_WIDTH])
+    bh = int(stats[best_label, cv2.CC_STAT_HEIGHT])
+    out[by : by + bh, bx : bx + bw][labels[by : by + bh, bx : bx + bw] == best_label] = 255
+    return out
 
 
 def _segment_bucket_dorsal(
@@ -229,33 +290,47 @@ def _segment_bucket_dorsal(
     ring, _ = _border_ring_and_strips(h, w, config.border_ring_frac)
 
     l_ch = frame.lab[:, :, 0]
-    a_f = frame.lab[:, :, 1].astype(np.float32)
-    b_f = frame.lab[:, :, 2].astype(np.float32)
-    l_f = l_ch.astype(np.float32)
-    chroma = np.hypot(a_f - 128.0, b_f - 128.0)
+    a_ch = frame.lab[:, :, 1]
+    b_ch = frame.lab[:, :, 2]
 
-    smooth_ring = ring & (l_ch >= 140) & (chroma <= 22.0) & (frame.grad_l <= 40.0)
-    wall_ref = smooth_ring if int(np.count_nonzero(smooth_ring)) >= 32 else ring
-
-    l_wall = float(np.median(l_f[wall_ref]))
-    b_wall = float(np.median(b_f[wall_ref]))
-    g_wall = float(np.median(frame.grad_l_clahe_blur[wall_ref]))
+    l_ring = l_ch[ring]
+    a_ring = a_ch[ring].astype(np.float32) - 128.0
+    b_ring = b_ch[ring]
+    g_ring = frame.grad_l[ring]
+    smooth_ring_sel = (
+        (l_ring >= 140)
+        & (np.hypot(a_ring, b_ring.astype(np.float32) - 128.0) <= 22.0)
+        & (g_ring <= 40.0)
+    )
+    if int(np.count_nonzero(smooth_ring_sel)) >= 32:
+        l_wall = _median_u8(l_ring[smooth_ring_sel])
+        b_wall = _median_u8(b_ring[smooth_ring_sel])
+        g_wall = float(np.median(frame.grad_l_clahe_blur[ring][smooth_ring_sel]))
+    else:
+        l_wall = _median_u8(l_ring)
+        b_wall = _median_u8(b_ring)
+        g_wall = float(np.median(frame.grad_l_clahe_blur[ring]))
 
     k_bh = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (17, 17))
     bh_rim = cv2.morphologyEx(frame.l_clahe, cv2.MORPH_BLACKHAT, k_bh)
     tex_wall_thr = min(46.0, max(24.0, g_wall * 1.75 + 7.0))
 
-    shadow_barrier = (bh_rim > 18.0) | (frame.grad_l_clahe_blur > tex_wall_thr)
-    wall_cand = (~shadow_barrier) & (np.abs(b_f - b_wall) <= 9.5) & (l_f >= l_wall - 45.0)
+    b_lo = int(math.ceil(b_wall - 9.5))
+    b_hi = int(math.floor(b_wall + 9.5))
+    l_min = int(math.ceil(l_wall - 45.0))
+    shadow_barrier = (bh_rim > 18) | (frame.grad_l_clahe_blur > tex_wall_thr)
+    wall_cand = (~shadow_barrier) & (b_ch >= b_lo) & (b_ch <= b_hi) & (l_ch >= l_min)
 
     _, wall_labels = cv2.connectedComponents(wall_cand.astype(np.uint8), connectivity=8)
-    border_1px = np.zeros((h, w), dtype=bool)
-    border_1px[0, :] = True
-    border_1px[-1, :] = True
-    border_1px[:, 0] = True
-    border_1px[:, -1] = True
-
-    border_labels = np.unique(wall_labels[border_1px])
+    border_vals = np.concatenate(
+        (
+            wall_labels[0, :],
+            wall_labels[-1, :],
+            wall_labels[:, 0],
+            wall_labels[:, -1],
+        )
+    )
+    border_labels = np.unique(border_vals)
     border_labels = border_labels[border_labels > 0]
     if border_labels.size > 0:
         wall_mask = np.isin(wall_labels, border_labels)
@@ -268,32 +343,33 @@ def _segment_bucket_dorsal(
 
     l_int = l_ch[interior]
     otsu_int = _otsu_threshold_masked(l_int)
-    l_p35 = float(np.percentile(l_int, 35))
-    l_p50 = float(np.percentile(l_int, 50))
+    l_p35, l_p50 = _percentile_u8(l_int, (35.0, 50.0))
 
-    cue_white = (
-        (l_f > otsu_int)
-        & (l_f >= l_p50)
-        & (frame.grad_l_clahe_blur <= 260.0)
-        & (a_f <= 133.5)
+    l_white_min = max(int(math.floor(otsu_int)) + 1, int(math.ceil(l_p50)))
+    cue_white = (l_ch >= l_white_min) & (frame.grad_l_clahe_blur <= 260.0) & (a_ch <= 133)
+    cue_yellow = (
+        (b_ch >= int(math.ceil(max(147.0, b_wall + 11.0))))
+        & (l_ch >= int(math.ceil(l_p35 + 10.0)))
+        & (a_ch <= 130)
     )
-    cue_yellow = (b_f >= max(147.0, b_wall + 11.0)) & (l_f >= l_p35 + 10.0) & (a_f <= 130.0)
-    cue_pink = (a_f >= 134.5) & (l_f >= 90.0)
+    cue_pink = (a_ch >= 135) & (l_ch >= 90)
     cue_tex = (
         (frame.grad_l_clahe_blur >= max(42.0, g_wall * 2.2 + 12.0))
         & (frame.grad_l_clahe_blur <= 220.0)
         & (center_prior > 0.25)
-        & (l_f >= l_p35 + 6.0)
+        & (l_ch >= int(math.ceil(l_p35 + 6.0)))
     )
 
-    raw_fg = np.where(interior & (cue_white | cue_yellow | cue_pink | cue_tex), 255, 0).astype(
-        np.uint8
+    raw_fg = np.where(
+        interior & (cue_white | cue_yellow | cue_pink | cue_tex),
+        np.uint8(255),
+        np.uint8(0),
     )
     k_open = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (7, 7))
     k_close = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (15, 15))
     cleaned = cv2.morphologyEx(raw_fg, cv2.MORPH_OPEN, k_open)
     cleaned = cv2.morphologyEx(cleaned, cv2.MORPH_CLOSE, k_close)
-    filled = np.where(ndi.binary_fill_holes(cleaned > 0), 255, 0).astype(np.uint8)
+    filled = _fill_holes_u8(cleaned)
     return _select_dominant_component(filled, center_prior)
 
 
@@ -320,29 +396,32 @@ def _segment_scale_or_litter(
         bg_ref = np.ones((h, w), dtype=bool)
 
     l_ch = frame.lab[:, :, 0]
-    l_f = l_ch.astype(np.float32)
-    a_f = frame.lab[:, :, 1].astype(np.float32)
-    b_f = frame.lab[:, :, 2].astype(np.float32)
+    a_ch = frame.lab[:, :, 1]
+    b_ch = frame.lab[:, :, 2]
     s_ch = frame.hsv[:, :, 1]
 
-    l_bg = float(np.median(l_f[bg_ref]))
-    a_bg = float(np.median(a_f[bg_ref]))
+    l_bg = _median_u8(l_ch[bg_ref])
+    a_bg = _median_u8(a_ch[bg_ref])
     g_bg = float(np.median(frame.grad_l_clahe_blur[bg_ref]))
 
     otsu_l = _otsu_threshold_masked(l_ch[valid] if np.any(valid) else l_ch.ravel())
 
-    cue_white = (l_f >= max(otsu_l - 6.0, l_bg + 12.0)) & (a_f <= max(130.5, a_bg + 1.5))
+    cue_white = (l_ch >= int(math.ceil(max(otsu_l - 6.0, l_bg + 12.0)))) & (
+        a_ch <= int(math.floor(max(130.5, a_bg + 1.5)))
+    )
     cue_yellow = (
-        (b_f >= 136.0)
-        & (a_f <= min(129.0, a_bg + 0.5))
+        (b_ch >= 136)
+        & (a_ch <= int(math.floor(min(129.0, a_bg + 0.5))))
         & (frame.grad_l_clahe_blur <= max(190.0, g_bg * 0.92))
     )
-    cue_pink = (a_f >= 138.0) & (s_ch >= 45) & (center_prior > 0.20)
-    cue_coherent = (l_f >= l_bg + 18.0) & (frame.grad_l_clahe_blur < 0.75 * g_bg)
+    cue_pink = (a_ch >= 138) & (s_ch >= 45) & (center_prior > 0.20)
+    cue_coherent = (l_ch >= int(math.ceil(l_bg + 18.0))) & (frame.grad_l_clahe_blur < 0.75 * g_bg)
 
     # Subtract LCD/platter exclusion strictly BEFORE morphological opening/closing.
-    raw_fg = np.where((cue_white | cue_yellow | cue_pink | cue_coherent) & valid, 255, 0).astype(
-        np.uint8
+    raw_fg = np.where(
+        (cue_white | cue_yellow | cue_pink | cue_coherent) & valid,
+        np.uint8(255),
+        np.uint8(0),
     )
 
     # Elliptical MORPH_OPEN(9x9) severs thin leg/platter bridges before closing.
@@ -350,7 +429,7 @@ def _segment_scale_or_litter(
     k_close = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (13, 13))
     opened = cv2.morphologyEx(raw_fg, cv2.MORPH_OPEN, k_open)
     closed = cv2.morphologyEx(opened, cv2.MORPH_CLOSE, k_close)
-    filled = np.where(ndi.binary_fill_holes(closed > 0), 255, 0).astype(np.uint8)
+    filled = _fill_holes_u8(closed)
 
     # Re-zero LCD exclusion after closing/hole-filling so bridging can never re-enter LCD.
     filled[excl] = 0
@@ -397,10 +476,10 @@ def _run_adaptive_fallback(
             k_close = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (11, 11))
             for pct in (70.0, 55.0):
                 thr = float(np.percentile(valid_scores, pct))
-                cand = np.where((score >= thr) & valid, 255, 0).astype(np.uint8)
+                cand = np.where((score >= thr) & valid, np.uint8(255), np.uint8(0))
                 cand = cv2.morphologyEx(cand, cv2.MORPH_OPEN, k_open)
                 cand = cv2.morphologyEx(cand, cv2.MORPH_CLOSE, k_close)
-                cand = np.where(ndi.binary_fill_holes(cand > 0), 255, 0).astype(np.uint8)
+                cand = _fill_holes_u8(cand)
                 cand[excl] = 0
                 cand = _select_dominant_component(cand, center_prior)
                 frac = float(np.count_nonzero(cand)) / frame_area

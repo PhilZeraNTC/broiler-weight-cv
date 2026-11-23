@@ -29,7 +29,8 @@ import math
 
 import cv2
 import numpy as np
-from skimage.measure import regionprops
+from scipy.spatial import ConvexHull, QhullError
+from skimage.measure import perimeter as skimage_perimeter
 
 from backend.app.pdi.io_exif import OpticalContext
 from backend.app.pdi.segmentation import EllipseTuple, fit_ellipse_safe
@@ -112,12 +113,91 @@ def _signed_log_hu(moment: float) -> float:
     return float(-math.copysign(1.0, moment) * math.log10(abs(moment) + 1e-12))
 
 
-def _channel_summary(values: np.ndarray) -> tuple[float, float, float, float, float]:
-    """Return ``(mean, std, p10, p50, p90)`` as Python floats."""
-    mean_v = float(np.mean(values, dtype=np.float64))
-    std_v = float(np.std(values, dtype=np.float64))
-    p10, p50, p90 = np.percentile(values, (10.0, 50.0, 90.0))
-    return mean_v, std_v, float(p10), float(p50), float(p90)
+_DIAMOND_OFFSETS_2D: np.ndarray = np.array(
+    [[-0.5, 0.0], [0.5, 0.0], [0.0, -0.5], [0.0, 0.5]],
+    dtype=np.float64,
+)
+_BINS_256_F64: np.ndarray = np.arange(256, dtype=np.float64)
+
+
+def _channel_summary_u8(values_u8: np.ndarray) -> tuple[float, float, float, float, float]:
+    """Return exact ``(mean, std, p10, p50, p90)`` for 1D ``uint8`` pixels via histogram."""
+    n = values_u8.size
+    counts = np.bincount(values_u8, minlength=256)
+    n_f = float(n)
+    mean_v = float(np.dot(counts, _BINS_256_F64)) / n_f
+    var_v = float(np.dot(counts, (_BINS_256_F64 - mean_v) ** 2)) / n_f
+    std_v = float(math.sqrt(max(0.0, var_v)))
+
+    cdf = np.cumsum(counts)
+    quantiles: list[float] = []
+    for q in (0.10, 0.50, 0.90):
+        pos = q * float(n - 1)
+        lo_i = int(math.floor(pos))
+        hi_i = int(math.ceil(pos))
+        frac = pos - lo_i
+        v_lo = float(np.searchsorted(cdf, lo_i + 1))
+        v_hi = float(np.searchsorted(cdf, hi_i + 1))
+        quantiles.append(v_lo + frac * (v_hi - v_lo))
+    return mean_v, std_v, quantiles[0], quantiles[1], quantiles[2]
+
+
+def _mean_std_u8(values_u8: np.ndarray) -> tuple[float, float]:
+    """Return exact ``(mean, std)`` for 1D ``uint8`` pixels via histogram."""
+    n = values_u8.size
+    counts = np.bincount(values_u8, minlength=256)
+    n_f = float(n)
+    mean_v = float(np.dot(counts, _BINS_256_F64)) / n_f
+    var_v = float(np.dot(counts, (_BINS_256_F64 - mean_v) ** 2)) / n_f
+    return mean_v, float(math.sqrt(max(0.0, var_v)))
+
+
+def _area_convex_exact(crop_u8: np.ndarray, area_work: float) -> float:
+    """Compute exact 2D convex hull pixel count matching ``skimage.measure.regionprops``."""
+    bh, bw = crop_u8.shape
+    if bh <= 1 or bw <= 1:
+        return float(bh * bw)
+
+    contours, _ = cv2.findContours(crop_u8, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    if not contours:
+        return area_work
+
+    pts_xy = np.vstack([c.reshape(-1, 2) for c in contours])
+    pts_rc = pts_xy[:, ::-1].astype(np.float64)
+    if len(pts_rc) >= 3:
+        try:
+            hull0 = ConvexHull(pts_rc)
+            pts_rc = hull0.points[hull0.vertices]
+        except QhullError:
+            pass
+
+    shifted = (pts_rc[:, None, :] + _DIAMOND_OFFSETS_2D[None, :, :]).reshape(-1, 2)
+    try:
+        hull = ConvexHull(shifted)
+    except QhullError:
+        return area_work
+
+    eq = hull.equations  # a*r + b*c + d <= 0
+    rows = np.arange(bh, dtype=np.float64)[:, None]
+    a = eq[None, :, 0]
+    b = eq[None, :, 1]
+    d = eq[None, :, 2]
+    tol = 1e-10
+    rhs = -(a * rows + d) + tol
+    pos = b > 1e-12
+    neg = b < -1e-12
+    zero = (~pos) & (~neg)
+
+    safe_b = np.where(zero, 1.0, b)
+    bound = rhs / safe_b
+    c_max = np.min(np.where(pos, bound, float(bw - 1)), axis=1)
+    c_min = np.max(np.where(neg, bound, 0.0), axis=1)
+    row_ok = np.all(np.where(zero, a * rows + d <= tol, True), axis=1)
+
+    lo = np.maximum(0, np.ceil(c_min).astype(np.int64))
+    hi = np.minimum(bw - 1, np.floor(c_max).astype(np.int64))
+    counts = np.where(row_ok & (hi >= lo), hi - lo + 1, 0)
+    return float(np.sum(counts))
 
 
 def _validate_inputs(
@@ -185,10 +265,13 @@ def extract_mask_gated_features(
     zoom = float(optical.zoom_multiple)
     exif_present = 1.0 if optical.exif_optical_present else 0.0
 
-    mask_u8 = np.where(bird_mask > 0, 255, 0).astype(np.uint8)
-    mask_bool = mask_u8 == 255
+    if bird_mask.dtype == np.uint8:
+        _, mask_u8 = cv2.threshold(bird_mask, 0, 255, cv2.THRESH_BINARY)
+    else:
+        mask_u8 = np.where(bird_mask > 0, 255, 0).astype(np.uint8)
 
-    if not np.any(mask_bool):
+    bx, by, bw, bh = cv2.boundingRect(mask_u8)
+    if bw == 0 or bh == 0:
         zeroed = dict.fromkeys(FEATURE_COLUMNS, 0.0)
         zeroed["focal_length_mm"] = focal_mm
         zeroed["zoom_multiple"] = zoom
@@ -196,13 +279,26 @@ def extract_mask_gated_features(
         return _finalize_ordered_features(zeroed)
 
     work_h, work_w = bgr_work.shape[:2]
+    crop_u8 = mask_u8[by : by + bh, bx : bx + bw]
+    crop_bool = crop_u8 == 255
 
     # 1. Rotation-invariant morphometrics (14 columns).
-    props = regionprops(mask_bool.astype(np.uint8))[0]
-    area_work = float(props.area)
-    perimeter_work = float(props.perimeter)
-    area_convex_work = float(props.area_convex)
-    eccentricity_raw = float(props.eccentricity)
+    area_work = float(np.count_nonzero(crop_bool))
+    perimeter_work = float(skimage_perimeter(crop_bool))
+    area_convex_work = _area_convex_exact(crop_u8, area_work)
+
+    moments = cv2.moments(crop_u8)
+    m00 = float(moments["m00"])
+    if m00 > 0.0:
+        u20 = float(moments["mu20"]) / m00
+        u02 = float(moments["mu02"]) / m00
+        u11 = float(moments["mu11"]) / m00
+        common = math.sqrt(4.0 * u11 * u11 + (u20 - u02) * (u20 - u02))
+        lam1 = 0.5 * (u20 + u02 + common)
+        lam2 = max(0.0, 0.5 * (u20 + u02 - common))
+        eccentricity_raw = math.sqrt(max(0.0, 1.0 - lam2 / lam1)) if lam1 > 0.0 else 0.0
+    else:
+        eccentricity_raw = 0.0
     eccentricity = (
         min(1.0, max(0.0, eccentricity_raw)) if math.isfinite(eccentricity_raw) else 0.0
     )
@@ -210,7 +306,7 @@ def extract_mask_gated_features(
 
     active_contour = contour
     if active_contour is None or len(active_contour) == 0:
-        contours, _ = cv2.findContours(mask_u8, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+        contours, _ = cv2.findContours(crop_u8, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
         active_contour = max(contours, key=lambda c: (float(cv2.contourArea(c)), len(c)))
 
     active_ellipse = ellipse
@@ -237,72 +333,74 @@ def extract_mask_gated_features(
         max(0.0, 4.0 * math.pi * area_work / max(perimeter_work * perimeter_work, 1e-6)),
     )
 
-    hu_vals = cv2.HuMoments(cv2.moments(mask_u8)).ravel()
+    hu_vals = cv2.HuMoments(moments).ravel()
     log_hu_1 = _signed_log_hu(float(hu_vals[0]))
     log_hu_2 = _signed_log_hu(float(hu_vals[1]))
     log_hu_3 = _signed_log_hu(float(hu_vals[2]))
 
     # 2. Strictly pixel-local chromatic plumage & eroded interior texture (26 columns).
     # CRITICAL (PROIBIÇÃO 2 / D-08): Convert strictly bgr_work (NEVER tile-coupled bgr_clahe
-    # or spatial bgr_smooth) so outside-mask pixels have zero influence across the mask border.
-    lab_raw = cv2.cvtColor(bgr_work, cv2.COLOR_BGR2Lab)
-    hsv_raw = cv2.cvtColor(bgr_work, cv2.COLOR_BGR2HSV)
+    # or spatial bgr_smooth) on the tight mask bounding box so outside-mask pixels have zero
+    # influence across the mask border.
+    bgr_crop = bgr_work[by : by + bh, bx : bx + bw]
+    lab_crop = cv2.cvtColor(bgr_crop, cv2.COLOR_BGR2Lab)
+    hsv_crop = cv2.cvtColor(bgr_crop, cv2.COLOR_BGR2HSV)
 
-    l_vals = lab_raw[:, :, 0][mask_bool].astype(np.float64)
-    a_vals = lab_raw[:, :, 1][mask_bool].astype(np.float64)
-    b_vals = lab_raw[:, :, 2][mask_bool].astype(np.float64)
-    h_vals = hsv_raw[:, :, 0][mask_bool].astype(np.float64)
-    s_vals = hsv_raw[:, :, 1][mask_bool].astype(np.float64)
-    v_vals = hsv_raw[:, :, 2][mask_bool].astype(np.float64)
+    l_u8 = lab_crop[:, :, 0][crop_bool]
+    a_u8 = lab_crop[:, :, 1][crop_bool]
+    b_u8 = lab_crop[:, :, 2][crop_bool]
+    h_u8 = hsv_crop[:, :, 0][crop_bool]
+    s_u8 = hsv_crop[:, :, 1][crop_bool]
+    v_u8 = hsv_crop[:, :, 2][crop_bool]
 
-    lab_l_mean, lab_l_std, lab_l_p10, lab_l_p50, lab_l_p90 = _channel_summary(l_vals)
-    lab_a_mean, lab_a_std, lab_a_p10, lab_a_p50, lab_a_p90 = _channel_summary(a_vals)
-    lab_b_mean, lab_b_std, lab_b_p10, lab_b_p50, lab_b_p90 = _channel_summary(b_vals)
+    lab_l_mean, lab_l_std, lab_l_p10, lab_l_p50, lab_l_p90 = _channel_summary_u8(l_u8)
+    lab_a_mean, lab_a_std, lab_a_p10, lab_a_p50, lab_a_p90 = _channel_summary_u8(a_u8)
+    lab_b_mean, lab_b_std, lab_b_p10, lab_b_p50, lab_b_p90 = _channel_summary_u8(b_u8)
 
-    hsv_s_mean = float(np.mean(s_vals, dtype=np.float64))
-    hsv_s_std = float(np.std(s_vals, dtype=np.float64))
-    hsv_v_mean = float(np.mean(v_vals, dtype=np.float64))
-    hsv_v_std = float(np.std(v_vals, dtype=np.float64))
+    hsv_s_mean, hsv_s_std = _mean_std_u8(s_u8)
+    hsv_v_mean, hsv_v_std = _mean_std_u8(v_u8)
 
-    sat_mask = s_vals >= _HUE_SATURATION_THRESHOLD
+    sat_mask = s_u8 >= int(_HUE_SATURATION_THRESHOLD)
     if int(np.count_nonzero(sat_mask)) >= _MIN_SATURATED_HUE_PIXELS:
-        angles = h_vals[sat_mask] * (2.0 * math.pi / 180.0)
+        angles = h_u8[sat_mask].astype(np.float64) * (2.0 * math.pi / 180.0)
         hsv_h_sin_mean = float(np.mean(np.sin(angles), dtype=np.float64))
         hsv_h_cos_mean = float(np.mean(np.cos(angles), dtype=np.float64))
     else:
         hsv_h_sin_mean = 0.0
         hsv_h_cos_mean = 0.0
 
-    yellow_down_ratio = float(
-        np.mean((b_vals > 142.0) & (l_vals > 120.0) & (a_vals < 133.0), dtype=np.float64)
+    n_px_f = float(l_u8.size)
+    yellow_down_ratio = (
+        float(np.count_nonzero((b_u8 > 142) & (l_u8 > 120) & (a_u8 < 133))) / n_px_f
     )
-    white_plumage_ratio = float(
-        np.mean(
-            (l_vals > 165.0) & (np.hypot(a_vals - 128.0, b_vals - 128.0) < 16.0),
-            dtype=np.float64,
-        )
+    da_i32 = a_u8.astype(np.int32) - 128
+    db_i32 = b_u8.astype(np.int32) - 128
+    white_plumage_ratio = (
+        float(np.count_nonzero((l_u8 > 165) & ((da_i32 * da_i32 + db_i32 * db_i32) < 256)))
+        / n_px_f
     )
-    pink_skin_ratio = float(
-        np.mean(
-            (a_vals > 136.0) & (l_vals > 90.0) & (s_vals >= _HUE_SATURATION_THRESHOLD),
-            dtype=np.float64,
-        )
+    pink_skin_ratio = (
+        float(np.count_nonzero((a_u8 > 136) & (l_u8 > 90) & sat_mask)) / n_px_f
     )
 
     # Eroded interior feather micro-texture (3-px safety border for 3x3 Scharr/Laplacian stencils).
-    l_masked = np.where(mask_bool, lab_raw[:, :, 0], 0).astype(np.uint8)
+    # Pad tight crop by 4 zero pixels so borderType=BORDER_CONSTANT(0) stays bit-identical
+    # even when bird_mask touches the image perimeter.
+    pad_mask = np.pad(crop_u8, 4, mode="constant", constant_values=0)
     k_erode = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (7, 7))
-    eroded = cv2.erode(mask_u8, k_erode, borderType=cv2.BORDER_CONSTANT, borderValue=0)
+    eroded = cv2.erode(pad_mask, k_erode, borderType=cv2.BORDER_CONSTANT, borderValue=0)
     interior = eroded > 0
     if np.any(interior):
-        gx = cv2.Scharr(l_masked, cv2.CV_32F, 1, 0)
-        gy = cv2.Scharr(l_masked, cv2.CV_32F, 0, 1)
+        l_crop_masked = np.where(crop_bool, lab_crop[:, :, 0], 0).astype(np.uint8)
+        l_pad = np.pad(l_crop_masked, 4, mode="constant", constant_values=0)
+        gx = cv2.Scharr(l_pad, cv2.CV_32F, 1, 0)
+        gy = cv2.Scharr(l_pad, cv2.CV_32F, 0, 1)
         grad_mag_interior = np.hypot(
             gx[interior].astype(np.float64),
             gy[interior].astype(np.float64),
         )
         feather_grad_mean = float(np.mean(grad_mag_interior, dtype=np.float64))
-        lap = cv2.Laplacian(l_masked, cv2.CV_32F)
+        lap = cv2.Laplacian(l_pad, cv2.CV_32F)
         feather_laplacian_var = float(np.var(lap[interior].astype(np.float64), dtype=np.float64))
     else:
         feather_grad_mean = 0.0
