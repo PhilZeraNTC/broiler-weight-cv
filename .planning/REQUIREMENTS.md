@@ -14,11 +14,11 @@ Requirements for the MVP release (code freeze 2026-11-28, pitch 2026-11-30). Eac
 
 ### Classical PDI Engine & Watershed
 
-- [ ] **PDI-01** *(PRD REQ-03)*: Pipeline loads any `Path` or uploaded `bytes` through a single shared Pillow EXIF-first loader (extracting EXIF/Xiaomi `39321` before mandatory `ImageOps.exif_transpose()`, banning raw `cv2.imread`/`cv2.imdecode`) and runs configurable classical OpenCV preprocessing: aspect-ratio-preserving downscale to canonical working resolution (`768–960 px` long edge with tracked `scale_factor`), edge-preserving smoothing (Bilateral/Median filter), and local contrast normalization via CLAHE on the CIE Lab `L` channel.
-- [ ] **PDI-02** *(PRD REQ-04)*: Pipeline isolates the single-bird silhouette using strictly classical PDI (no deep learning) across all three visual scenarios (SF-400 scale on straw, top-down white plastic bucket including low-contrast white-on-white `>1000 g` birds, and free/oblique straw litter), explicitly suppressing the SF-400 LCD display, buttons, and circular platter before morphological open/close, dominant connected-component selection, and contour refinement.
-- [ ] **PDI-03** *(PRD REQ-05)*: Pipeline extracts features strictly inside the segmented bird mask (`bird_mask == 255`, verified by an automated outside-mask pixel-perturbation invariance test): geometric morphometrics (projected area, perimeter, fitted ellipse major/minor axes, eccentricity, convex area, solidity, circularity), scale-invariant chromatic plumage cues (yellow-down vs. white-plumage ratio, Lab/HSV statistics), and EXIF optical features (`focal_length_mm`, `zoom_multiple`, and optically normalized area validated empirically on the 114 paired dual-lens sessions without raw resolution leakage), plus capped-concurrency (`n_jobs=4`) batch extraction to `data/processed/features_clean.parquet`.
-- [ ] **PDI-04** *(PRD REQ-06)*: Single-bird PDI pipeline returns 4 encoded visual "X-Ray" inspection artifacts alongside the feature vector: (1) EXIF-oriented original, (2) preprocessed/CLAHE-Lab image, (3) clean binary bird mask (LCD excluded), and (4) final overlay displaying refined contour, fitted ellipse, and major/minor axes.
-- [ ] **PDI-05** *(PRD REQ-07 + `docs/proposta_pdi.md.pdf`)*: Dedicated classical Marker-based Watershed pipeline (`scipy.ndimage.distance_transform_edt` + Gaussian smoothing + scale-adaptive `h_maxima` / `peak_local_max` + `skimage.segmentation.watershed`, with chromatic red-feeder pre-suppression) separates touching birds across all 4 quarantined multi-bird folders (`417`, `757`, `823`, `1520`) and custom user uploads, returning basin/boundary maps, segmented bird count, per-bird pixel areas, and per-instance mask-gated morphometric/chromatic/optical features to enable illustrative individual weight estimation in `WEB-04`.
+- [x] **PDI-01** *(PRD REQ-03)*: Pipeline loads any `Path` or uploaded `bytes` through a single shared Pillow EXIF-first loader (extracting EXIF/Xiaomi `39321` before mandatory `ImageOps.exif_transpose()`, banning raw `cv2.imread`/`cv2.imdecode`) and runs configurable classical OpenCV preprocessing: aspect-ratio-preserving downscale to canonical working resolution (`768–960 px` long edge with tracked `scale_factor`), edge-preserving smoothing (Bilateral/Median filter), and local contrast normalization via CLAHE on the CIE Lab `L` channel.
+- [x] **PDI-02** *(PRD REQ-04)*: Pipeline isolates the single-bird silhouette using strictly classical PDI (no deep learning) across all three visual scenarios (SF-400 scale on straw, top-down white plastic bucket including low-contrast white-on-white `>1000 g` birds, and free/oblique straw litter), explicitly suppressing the SF-400 LCD display, buttons, and circular platter before morphological open/close, dominant connected-component selection, and contour refinement.
+- [x] **PDI-03** *(PRD REQ-05)*: Pipeline extracts features strictly inside the segmented bird mask (`bird_mask == 255`, verified by an automated outside-mask pixel-perturbation invariance test): geometric morphometrics (projected area, perimeter, fitted ellipse major/minor axes, eccentricity, convex area, solidity, circularity), scale-invariant chromatic plumage cues (yellow-down vs. white-plumage ratio, Lab/HSV statistics), and EXIF optical features (`focal_length_mm`, `zoom_multiple`, and optically normalized area validated empirically on the 114 paired dual-lens sessions without raw resolution leakage), plus capped-concurrency (`n_jobs=4`) batch extraction to `data/processed/features_clean.parquet`.
+- [x] **PDI-04** *(PRD REQ-06)*: Single-bird PDI pipeline returns 4 encoded visual "X-Ray" inspection artifacts alongside the feature vector: (1) EXIF-oriented original, (2) preprocessed/CLAHE-Lab image, (3) clean binary bird mask (LCD excluded), and (4) final overlay displaying refined contour, fitted ellipse, and major/minor axes.
+- [x] **PDI-05** *(PRD REQ-07 + `docs/proposta_pdi.md.pdf`)*: Dedicated classical Marker-based Watershed pipeline (`scipy.ndimage.distance_transform_edt` + Gaussian smoothing + scale-adaptive `h_maxima` / `peak_local_max` + `skimage.segmentation.watershed`, with chromatic red-feeder pre-suppression) separates touching birds across all 4 quarantined multi-bird folders (`417`, `757`, `823`, `1520`) and custom user uploads, returning basin/boundary maps, segmented bird count, per-bird pixel areas, and per-instance mask-gated morphometric/chromatic/optical features to enable illustrative individual weight estimation in `WEB-04`.
 
 ### Tabular Regression & Stratified Validation
 
@@ -74,11 +74,11 @@ Which phases cover which requirements. Populated during roadmap creation.
 |-------------|-------|--------|
 | DATA-01 | Phase 1 | Complete |
 | DATA-02 | Phase 1 | Complete |
-| PDI-01 | Phase 2 | Pending |
-| PDI-02 | Phase 2 | Pending |
-| PDI-03 | Phase 2 | Pending |
-| PDI-04 | Phase 2 | Pending |
-| PDI-05 | Phase 2 | Pending |
+| PDI-01 | Phase 2 | Complete |
+| PDI-02 | Phase 2 | Complete |
+| PDI-03 | Phase 2 | Complete |
+| PDI-04 | Phase 2 | Complete |
+| PDI-05 | Phase 2 | Complete |
 | MOD-01 | Phase 3 | Pending |
 | MOD-02 | Phase 3 | Pending |
 | MOD-03 | Phase 3 | Pending |
@@ -96,4 +96,4 @@ Which phases cover which requirements. Populated during roadmap creation.
 
 ---
 *Requirements defined: 2026-11-20*
-*Last updated: 2026-11-20 after ingest-docs merge (`docs/proposta_pdi.md.pdf` + dataset audit)*
+*Last updated: 2026-11-23 after Phase 2 completion*
