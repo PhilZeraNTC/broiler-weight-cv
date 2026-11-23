@@ -11,6 +11,7 @@ from __future__ import annotations
 import hashlib
 import io
 import json
+import subprocess
 from pathlib import Path
 from typing import Any
 
@@ -27,6 +28,7 @@ from backend.app.config import (
     FEATURES_CLEAN_PATH,
     PDI_CALIBRATION_AUDIT_PATH,
     RAW_DATASET_DIR,
+    REPO_ROOT,
 )
 from backend.app.pdi.config import PDIConfig
 from backend.app.pdi.features import BANNED_FEATURE_COLUMNS, FEATURE_COLUMNS
@@ -481,3 +483,157 @@ def test_write_calibration_audit_rejects_proibicao_4_leak_markers(
     with pytest.raises(ValueError, match="PROIBIÇÃO 4"):
         extract_features.write_calibration_audit(bad_payload, target)
     assert not target.exists()
+
+
+def test_real_features_clean_parquet_schema_alignment_finite_values_and_fallback_gate() -> None:
+    """Read-only Phase 2 real-corpus gate over materialized features_clean.parquet (D-07..D-10)."""
+    assert FEATURES_CLEAN_PATH.is_file(), "data/processed/features_clean.parquet must exist"
+    assert CLEAN_MANIFEST_PATH.is_file(), "data/processed/manifest_clean.parquet must exist"
+
+    # Exact 60-column PyArrow schema & Arrow types contract.
+    schema = pq.read_schema(FEATURES_CLEAN_PATH)
+    assert schema.names == list(extract_features.FEATURES_PARQUET_COLUMNS)
+    assert len(schema.names) == 60
+    for col_name, expected_type in _expected_arrow_types().items():
+        assert schema.field(col_name).type == expected_type, (
+            f"Arrow type mismatch on {col_name!r}: {schema.field(col_name).type} != {expected_type}"
+        )
+
+    features_df = pd.read_parquet(FEATURES_CLEAN_PATH)
+    manifest_df = pd.read_parquet(CLEAN_MANIFEST_PATH)
+
+    assert len(features_df) == 1738
+    assert len(manifest_df) == 1738
+    assert list(features_df.columns) == list(extract_features.FEATURES_PARQUET_COLUMNS)
+    assert BANNED_FEATURE_COLUMNS.isdisjoint(features_df.columns)
+
+    # Exact 1:1 row alignment with manifest_clean.parquet.
+    for join_col in ("image_id", "fold", "session_id", "weight_g", "weight_band", "lens_class"):
+        assert features_df[join_col].tolist() == manifest_df[join_col].tolist(), (
+            f"Row alignment drift on column {join_col!r} vs manifest_clean.parquet"
+        )
+
+    # Uniform locked PDIConfig hash across all 1,738 rows.
+    expected_hash = PDIConfig().config_hash()
+    assert set(features_df["pdi_config_hash"].unique().tolist()) == {expected_hash}
+
+    # Strictly finite values (zero NaN / ±Inf) across all 1,738 x 49 features.
+    feat_matrix = features_df.loc[:, list(FEATURE_COLUMNS)].to_numpy(dtype=np.float64)
+    assert feat_matrix.shape == (1738, 49)
+    assert not np.any(np.isnan(feat_matrix))
+    assert np.all(np.isfinite(feat_matrix))
+
+    # Strictly positive native & optically normalized silhouette areas on every clean image.
+    assert bool((features_df["area_px"] > 0.0).all())
+    assert bool((features_df["area_optical_norm"] > 0.0).all())
+
+    # D-07 fallback gate: strictly < 2.0% (<= 34 / 1,738 clean images).
+    fallback_count = int(features_df["segmentation_fallback"].sum())
+    fallback_rate = fallback_count / len(features_df)
+    assert fallback_count <= 34, f"Fallback count {fallback_count} exceeds D-07 cap of 34"
+    assert fallback_rate < 0.02, f"Fallback rate {fallback_rate:.4%} >= 2.0%"
+
+    # Zero SF-400 LCD false positives on dorsal bucket scenes.
+    bucket_lcd_fp = int(
+        ((features_df["scene_is_bucket"]) & (features_df["lcd_excluded_px"] > 0)).sum()
+    )
+    assert bucket_lcd_fp == 0
+
+
+def test_real_pdi_calibration_audit_json_zero_leakage_and_4_scope_optical_proof() -> None:
+    """Verify git-tracked models/pdi_calibration_audit.json contract, D-09 proof & PROIBIÇÃO 4."""
+    assert PDI_CALIBRATION_AUDIT_PATH.is_file(), "models/pdi_calibration_audit.json must exist"
+    assert FEATURES_CLEAN_PATH.is_file(), "data/processed/features_clean.parquet must exist"
+
+    raw_text = PDI_CALIBRATION_AUDIT_PATH.read_text(encoding="utf-8")
+    lowered_text = raw_text.lower()
+    for forbidden in _FORBIDDEN_LEAK_MARKERS:
+        assert forbidden not in lowered_text, (
+            f"PROIBIÇÃO 4 / T-02-12 violation: forbidden token {forbidden!r} in calibration audit"
+        )
+
+    payload = json.loads(raw_text)
+    cfg = PDIConfig()
+    assert payload["schema_version"] == extract_features.CALIBRATION_AUDIT_SCHEMA_VERSION
+    assert payload["pdi_config_hash"] == cfg.config_hash()
+
+    summary = payload["dataset_extraction_summary"]
+    assert summary["n_clean_images"] == 1738
+    assert summary["n_bucket_dorsal"] + summary["n_scale_or_litter"] == 1738
+    assert summary["workers"] == 4
+    assert summary["primary_fallback_count"] <= 34
+    assert summary["primary_fallback_pct"] < 2.0
+    assert summary["lcd_suppression_bucket_false_positives"] == 0
+    assert "batch_wall_clock_sec" not in summary
+
+    cal = payload["paired_dual_lens_calibration"]
+    winning = "area_px / (zoom_multiple ** 2)"
+    rejected = "area_px / ((focal_length_mm * zoom_multiple) ** 2)"
+    assert cal["winning_formula"] == winning
+    assert cal["rejected_double_count_formula"] == rejected
+    assert cal["resolution_area_ratio_wide_over_uw"] == pytest.approx(1.5625)
+    assert cal["expected_zoom_area_ratio_wide_over_uw"] == pytest.approx(2.7778)
+
+    scopes = cal["scopes"]
+    assert set(scopes.keys()) == set(_EXPECTED_SCOPES)
+    assert scopes["all_mixed_lens_sessions"]["n_pairs"] == 127
+
+    expected_formulas = set(_EXPECTED_CANDIDATE_FORMULAS)
+    for scope_name in _EXPECTED_SCOPES:
+        scope = scopes[scope_name]
+        assert scope["n_pairs"] > 0
+        formulas = scope["formulas"]
+        assert set(formulas.keys()) == expected_formulas
+
+        win_stats = formulas[winning]
+        rej_stats = formulas[rejected]
+        assert win_stats["median_wide_over_uw"] is not None
+        assert win_stats["median_abs_log_ratio"] is not None
+        assert rej_stats["median_wide_over_uw"] is not None
+        assert rej_stats["median_abs_log_ratio"] is not None
+
+        # D-09 empirical proof across all 4 paired dual-lens scopes:
+        # winning formula beats double-counted formula on every scope,
+        # while double-counted formula catastrophically over-corrects (< 0.30).
+        assert win_stats["median_abs_log_ratio"] < rej_stats["median_abs_log_ratio"], (
+            f"Scope {scope_name!r}: winning formula did not beat rejected double-count formula"
+        )
+        assert rej_stats["median_wide_over_uw"] < 0.30, (
+            f"Scope {scope_name!r}: expected double-count over-correction < 0.30, "
+            f"got {rej_stats['median_wide_over_uw']}"
+        )
+
+    bucket_win_ratio = scopes["bucket_only_pairs"]["formulas"][winning]["median_wide_over_uw"]
+    assert 0.80 <= bucket_win_ratio <= 1.25, (
+        f"bucket_only_pairs winning Wide/UW ratio {bucket_win_ratio} outside [0.80, 1.25]"
+    )
+
+    # Byte-determinism proof: rebuilding audit from features_clean.parquet matches verbatim.
+    features_df = pd.read_parquet(FEATURES_CLEAN_PATH)
+    rebuilt = extract_features.build_calibration_audit(features_df, cfg, workers=4)
+    assert rebuilt == payload
+
+
+def test_git_hygiene_excludes_features_parquet_while_tracking_calibration_audit() -> None:
+    """PROIBIÇÃO 4 / T-02-12 git hygiene: data/raw & data/processed untracked; audit trackable."""
+    tracked = subprocess.run(
+        ["git", "ls-files", "data/raw", "data/processed"],
+        cwd=REPO_ROOT,
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    assert tracked.stdout.strip() == "", (
+        "PROIBIÇÃO 4 violation: data/raw or data/processed files are tracked by Git."
+    )
+
+    ignored_check = subprocess.run(
+        ["git", "check-ignore", "models/pdi_calibration_audit.json"],
+        cwd=REPO_ROOT,
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    assert ignored_check.returncode != 0, (
+        "models/pdi_calibration_audit.json must NOT be ignored by .gitignore."
+    )
