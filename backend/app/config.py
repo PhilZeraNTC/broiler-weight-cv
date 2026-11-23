@@ -19,6 +19,9 @@ QUARANTINE_MANIFEST_PATH: Path = PROCESSED_DIR / "manifest_quarantine.parquet"
 AUDIT_SUMMARY_PATH: Path = MODELS_DIR / "dataset_audit_summary.json"
 FEATURES_CLEAN_PATH: Path = PROCESSED_DIR / "features_clean.parquet"
 PDI_CALIBRATION_AUDIT_PATH: Path = MODELS_DIR / "pdi_calibration_audit.json"
+MODEL_BUNDLE_PATH: Path = MODELS_DIR / "weight_regressor.joblib"
+EVALUATION_REPORT_PATH: Path = MODELS_DIR / "evaluation_report.json"
+PRESETS_CATALOG_PATH: Path = MODELS_DIR / "presets_catalog.json"
 
 __all__ = [
     "REPO_ROOT",
@@ -31,4 +34,7 @@ __all__ = [
     "AUDIT_SUMMARY_PATH",
     "FEATURES_CLEAN_PATH",
     "PDI_CALIBRATION_AUDIT_PATH",
+    "MODEL_BUNDLE_PATH",
+    "EVALUATION_REPORT_PATH",
+    "PRESETS_CATALOG_PATH",
 ]
