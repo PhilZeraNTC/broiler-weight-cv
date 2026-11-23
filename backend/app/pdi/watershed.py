@@ -35,7 +35,15 @@ from skimage.feature import peak_local_max
 from skimage.morphology import h_maxima
 from skimage.segmentation import watershed as skimage_watershed
 
-from backend.app.pdi.config import PDIConfig
+from backend.app.pdi.config import (
+    WATERSHED_MAX_AREA_RATIO,
+    WATERSHED_MAX_DISTANCE_REL,
+    WATERSHED_MAX_H_REL,
+    WATERSHED_MIN_AREA_RATIO,
+    WATERSHED_MIN_DISTANCE_REL,
+    WATERSHED_MIN_H_REL,
+    PDIConfig,
+)
 from backend.app.pdi.features import extract_mask_gated_features
 from backend.app.pdi.io_exif import (
     OpticalContext,
@@ -43,15 +51,16 @@ from backend.app.pdi.io_exif import (
     load_working_rgb,
     resolve_optical_context,
 )
+from backend.app.pdi.lcd_suppression import suppress_lcd_and_platter
 from backend.app.pdi.preprocess import PreprocessedFrame, preprocess_working_rgb
 
 # ASVS V5 finite parameter bounds for interactive Watershed controls (T-02-07).
-MIN_H_REL: float = 0.05
-MAX_H_REL: float = 0.80
-MIN_DISTANCE_REL: float = 0.20
-MAX_DISTANCE_REL: float = 2.50
-MIN_AREA_RATIO: float = 0.01
-MAX_AREA_RATIO: float = 0.45
+MIN_H_REL: float = WATERSHED_MIN_H_REL
+MAX_H_REL: float = WATERSHED_MAX_H_REL
+MIN_DISTANCE_REL: float = WATERSHED_MIN_DISTANCE_REL
+MAX_DISTANCE_REL: float = WATERSHED_MAX_DISTANCE_REL
+MIN_AREA_RATIO: float = WATERSHED_MIN_AREA_RATIO
+MAX_AREA_RATIO: float = WATERSHED_MAX_AREA_RATIO
 
 # General photometric / morphological geometry thresholds (zero folder hardcoding).
 _OTSU_SCORE_FLOOR: float = 78.0
@@ -476,7 +485,9 @@ def run_watershed_pdi(
 
     red_excl = _suppress_red_feeder(frame)
     red_excluded_px = int(np.count_nonzero(red_excl))
-    union_mask = _build_multi_bird_union_mask(frame, red_excl)
+    lcd_excl = suppress_lcd_and_platter(frame, cfg).exclusion_mask
+    combined_excl = cv2.bitwise_or(red_excl, lcd_excl)
+    union_mask = _build_multi_bird_union_mask(frame, combined_excl)
     fg_bool = union_mask > 0
 
     def _empty_result(
@@ -570,7 +581,7 @@ def run_watershed_pdi(
     for idx, (sr, sc) in enumerate(unique_seeds, start=1):
         markers[sr, sc] = idx
 
-    ws_labels = skimage_watershed(-dist_s, markers, mask=fg_bool)
+    ws_labels = skimage_watershed(-dist_s, markers, connectivity=2, mask=fg_bool)
     unique_lbls = [int(lbl) for lbl in np.unique(ws_labels) if int(lbl) > 0]
     if not unique_lbls:
         return _empty_result(dist_s, unique_seeds)

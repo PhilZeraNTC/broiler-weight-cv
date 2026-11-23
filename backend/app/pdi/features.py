@@ -287,7 +287,7 @@ def extract_mask_gated_features(
     perimeter_work = float(skimage_perimeter(crop_bool))
     area_convex_work = _area_convex_exact(crop_u8, area_work)
 
-    moments = cv2.moments(crop_u8)
+    moments = cv2.moments(crop_u8, binaryImage=True)
     m00 = float(moments["m00"])
     if m00 > 0.0:
         u20 = float(moments["mu20"]) / m00
@@ -304,10 +304,10 @@ def extract_mask_gated_features(
     )
     solidity = float(area_work / max(area_convex_work, 1e-6))
 
+    all_contours, _ = cv2.findContours(crop_u8, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
     active_contour = contour
     if active_contour is None or len(active_contour) == 0:
-        contours, _ = cv2.findContours(crop_u8, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-        active_contour = max(contours, key=lambda c: (float(cv2.contourArea(c)), len(c)))
+        active_contour = max(all_contours, key=lambda c: (float(cv2.contourArea(c)), len(c)))
 
     active_ellipse = ellipse
     if active_ellipse is None:
@@ -317,8 +317,12 @@ def extract_mask_gated_features(
     major_work = float(max(d1, d2))
     minor_work = float(min(d1, d2))
 
-    (_, _), (rw, rh), _ = cv2.minAreaRect(active_contour)
-    extent_rotrect = float(area_work / max(float(rw) * float(rh), 1e-6))
+    # Bound all foreground mask contours using inclusive pixel spans (rw + 1) * (rh + 1)
+    # so 1-px collinear, tiny, or multi-component masks never explode extent_rotrect.
+    all_pts = np.vstack(all_contours) if all_contours else active_contour
+    (_, _), (rw, rh), _ = cv2.minAreaRect(all_pts)
+    rotrect_area = max((float(rw) + 1.0) * (float(rh) + 1.0), 1.0)
+    extent_rotrect = float(min(1.0, max(0.0, area_work / rotrect_area)))
 
     sf_sq = sf * sf
     area_px = area_work / sf_sq
@@ -327,7 +331,8 @@ def extract_mask_gated_features(
     minor_axis_px = minor_work / sf
     convex_area_px = area_convex_work / sf_sq
     area_frac = area_work / float(work_h * work_w)
-    aspect_ratio_ellipse = major_axis_px / max(minor_axis_px, 1e-6)
+    safe_minor_px = max(minor_axis_px, 1.0 / sf)
+    aspect_ratio_ellipse = major_axis_px / safe_minor_px
     circularity = min(
         1.5,
         max(0.0, 4.0 * math.pi * area_work / max(perimeter_work * perimeter_work, 1e-6)),

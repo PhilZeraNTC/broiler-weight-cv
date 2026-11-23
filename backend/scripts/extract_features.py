@@ -140,10 +140,10 @@ def _is_contained_non_symlink(path: Path, canonical_root: Path) -> bool:
     return resolved.is_relative_to(canonical_root)
 
 
-def _resolve_safe_image_path(rel_path: str, canonical_root: Path) -> Path:
+def _resolve_safe_image_path(rel_path: Any, canonical_root: Path) -> Path:
     """Resolve a manifest ``rel_path`` under ``canonical_root`` enforcing ASVS V4 containment."""
     if not isinstance(rel_path, str) or not rel_path.strip():
-        raise ValueError("ASVS V4 path containment violation: empty rel_path in manifest.")
+        raise ValueError("ASVS V4 path containment violation: empty or non-string rel_path.")
     if "\\" in rel_path or "\x00" in rel_path:
         raise ValueError("ASVS V4 path containment violation: illegal path characters.")
 
@@ -497,7 +497,7 @@ def run_extract_features(
     # Validate every rel_path against ASVS V4 containment BEFORE starting worker pool (T-02-10).
     tasks: list[tuple[str, dict[str, Any], PDIConfig]] = []
     for record in manifest_df.loc[:, list(_REQUIRED_MANIFEST_COLUMNS)].to_dict(orient="records"):
-        safe_path = _resolve_safe_image_path(str(record["rel_path"]), canonical_root)
+        safe_path = _resolve_safe_image_path(record["rel_path"], canonical_root)
         manifest_meta = {
             "image_id": str(record["image_id"]),
             "fold": int(record["fold"]),

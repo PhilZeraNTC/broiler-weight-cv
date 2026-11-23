@@ -15,6 +15,13 @@ import math
 from dataclasses import asdict, dataclass
 from typing import Literal
 
+WATERSHED_MIN_H_REL: float = 0.05
+WATERSHED_MAX_H_REL: float = 0.80
+WATERSHED_MIN_DISTANCE_REL: float = 0.20
+WATERSHED_MAX_DISTANCE_REL: float = 2.50
+WATERSHED_MIN_AREA_RATIO: float = 0.01
+WATERSHED_MAX_AREA_RATIO: float = 0.45
+
 
 def _validate_int(
     name: str,
@@ -100,11 +107,15 @@ class PDIConfig:
 
     def __post_init__(self) -> None:
         _validate_int("working_long_edge", self.working_long_edge, min_value=64)
-        _validate_finite_float(
+        object.__setattr__(
+            self,
             "draft_scale_multiplier",
-            self.draft_scale_multiplier,
-            min_value=0.0,
-            min_inclusive=False,
+            _validate_finite_float(
+                "draft_scale_multiplier",
+                self.draft_scale_multiplier,
+                min_value=0.0,
+                min_inclusive=False,
+            ),
         )
         if self.smoothing_method not in ("bilateral", "median"):
             raise ValueError(
@@ -112,26 +123,38 @@ class PDIConfig:
                 f"got {self.smoothing_method!r}"
             )
         _validate_int("bilateral_d", self.bilateral_d, min_value=1)
-        _validate_finite_float(
+        object.__setattr__(
+            self,
             "bilateral_sigma_color",
-            self.bilateral_sigma_color,
-            min_value=0.0,
-            min_inclusive=False,
+            _validate_finite_float(
+                "bilateral_sigma_color",
+                self.bilateral_sigma_color,
+                min_value=0.0,
+                min_inclusive=False,
+            ),
         )
-        _validate_finite_float(
+        object.__setattr__(
+            self,
             "bilateral_sigma_space",
-            self.bilateral_sigma_space,
-            min_value=0.0,
-            min_inclusive=False,
+            _validate_finite_float(
+                "bilateral_sigma_space",
+                self.bilateral_sigma_space,
+                min_value=0.0,
+                min_inclusive=False,
+            ),
         )
         _validate_int("median_ksize", self.median_ksize, min_value=3)
         if self.median_ksize % 2 != 1:
             raise ValueError(f"median_ksize must be odd, got {self.median_ksize!r}")
-        _validate_finite_float(
+        object.__setattr__(
+            self,
             "clahe_clip_limit",
-            self.clahe_clip_limit,
-            min_value=0.0,
-            min_inclusive=False,
+            _validate_finite_float(
+                "clahe_clip_limit",
+                self.clahe_clip_limit,
+                min_value=0.0,
+                min_inclusive=False,
+            ),
         )
         if not isinstance(self.clahe_tile_grid, tuple) or len(self.clahe_tile_grid) != 2:
             raise ValueError(
@@ -140,25 +163,37 @@ class PDIConfig:
         _validate_int("clahe_tile_grid[0]", self.clahe_tile_grid[0], min_value=1)
         _validate_int("clahe_tile_grid[1]", self.clahe_tile_grid[1], min_value=1)
 
-        _validate_finite_float(
+        object.__setattr__(
+            self,
             "border_ring_frac",
-            self.border_ring_frac,
-            min_value=0.0,
-            min_inclusive=False,
-            max_value=0.5,
-            max_inclusive=False,
+            _validate_finite_float(
+                "border_ring_frac",
+                self.border_ring_frac,
+                min_value=0.0,
+                min_inclusive=False,
+                max_value=0.5,
+                max_inclusive=False,
+            ),
         )
-        _validate_finite_float(
+        object.__setattr__(
+            self,
             "bucket_smooth_white_min_frac",
-            self.bucket_smooth_white_min_frac,
-            min_value=0.0,
-            max_value=1.0,
+            _validate_finite_float(
+                "bucket_smooth_white_min_frac",
+                self.bucket_smooth_white_min_frac,
+                min_value=0.0,
+                max_value=1.0,
+            ),
         )
-        _validate_finite_float(
+        object.__setattr__(
+            self,
             "bucket_ring_grad_max",
-            self.bucket_ring_grad_max,
-            min_value=0.0,
-            min_inclusive=False,
+            _validate_finite_float(
+                "bucket_ring_grad_max",
+                self.bucket_ring_grad_max,
+                min_value=0.0,
+                min_inclusive=False,
+            ),
         )
         _validate_int(
             "bucket_min_white_sides",
@@ -188,18 +223,28 @@ class PDIConfig:
                 "min_valid_area_frac must be strictly less than max_valid_area_frac, "
                 f"got ({min_frac!r}, {max_frac!r})"
             )
+        object.__setattr__(self, "min_valid_area_frac", min_frac)
+        object.__setattr__(self, "max_valid_area_frac", max_frac)
 
-        _validate_finite_float(
+        object.__setattr__(
+            self,
             "default_focal_length_mm",
-            self.default_focal_length_mm,
-            min_value=0.5,
-            max_value=200.0,
+            _validate_finite_float(
+                "default_focal_length_mm",
+                self.default_focal_length_mm,
+                min_value=0.5,
+                max_value=200.0,
+            ),
         )
-        _validate_finite_float(
+        object.__setattr__(
+            self,
             "default_zoom_multiple",
-            self.default_zoom_multiple,
-            min_value=0.1,
-            max_value=20.0,
+            _validate_finite_float(
+                "default_zoom_multiple",
+                self.default_zoom_multiple,
+                min_value=0.1,
+                max_value=20.0,
+            ),
         )
 
         _validate_int("xray_display_long_edge", self.xray_display_long_edge, min_value=64)
@@ -210,26 +255,35 @@ class PDIConfig:
             max_value=100,
         )
 
-        _validate_finite_float(
+        object.__setattr__(
+            self,
             "watershed_h_rel",
-            self.watershed_h_rel,
-            min_value=0.0,
-            min_inclusive=False,
-            max_value=1.0,
-            max_inclusive=False,
+            _validate_finite_float(
+                "watershed_h_rel",
+                self.watershed_h_rel,
+                min_value=WATERSHED_MIN_H_REL,
+                max_value=WATERSHED_MAX_H_REL,
+            ),
         )
-        _validate_finite_float(
+        object.__setattr__(
+            self,
             "watershed_min_distance_rel",
-            self.watershed_min_distance_rel,
-            min_value=0.0,
-            min_inclusive=False,
+            _validate_finite_float(
+                "watershed_min_distance_rel",
+                self.watershed_min_distance_rel,
+                min_value=WATERSHED_MIN_DISTANCE_REL,
+                max_value=WATERSHED_MAX_DISTANCE_REL,
+            ),
         )
-        _validate_finite_float(
+        object.__setattr__(
+            self,
             "watershed_min_area_ratio",
-            self.watershed_min_area_ratio,
-            min_value=0.0,
-            max_value=1.0,
-            max_inclusive=False,
+            _validate_finite_float(
+                "watershed_min_area_ratio",
+                self.watershed_min_area_ratio,
+                min_value=WATERSHED_MIN_AREA_RATIO,
+                max_value=WATERSHED_MAX_AREA_RATIO,
+            ),
         )
 
     def config_hash(self) -> str:
@@ -242,4 +296,12 @@ class PDIConfig:
         return hashlib.sha256(payload).hexdigest()[:16]
 
 
-__all__ = ["PDIConfig"]
+__all__ = [
+    "PDIConfig",
+    "WATERSHED_MAX_AREA_RATIO",
+    "WATERSHED_MAX_DISTANCE_REL",
+    "WATERSHED_MAX_H_REL",
+    "WATERSHED_MIN_AREA_RATIO",
+    "WATERSHED_MIN_DISTANCE_REL",
+    "WATERSHED_MIN_H_REL",
+]

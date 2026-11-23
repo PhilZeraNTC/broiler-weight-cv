@@ -301,3 +301,93 @@ def test_extract_mask_gated_features_rejects_invalid_inputs() -> None:
         extract_mask_gated_features(bgr, mask, math.nan, optical)
     with pytest.raises(ValueError, match="scale_factor"):
         extract_mask_gated_features(bgr, mask, True, optical)
+
+
+def test_hu_moments_use_binary_image_and_avoid_255_power_attenuation() -> None:
+    """CR-01 regression: {0, 255} mask must yield identical Hu moments to {0, 1} binary mask."""
+    bgr, mask_255 = _make_textured_bird_frame(center=(320, 173), axes=(95, 48), angle_deg=22.0)
+    # Add an asymmetric beak protrusion so Hu moment 3 is non-zero and sensitive to 255^3 scaling.
+    cv2.ellipse(mask_255, (425, 190), (22, 12), 10.0, 0, 360, 255, -1)
+    optical = OpticalContext(4.25, 1.0, True, False, "wide")
+
+    feats = extract_mask_gated_features(bgr, mask_255, 768.0 / 4080.0, optical)
+
+    bx, by, bw, bh = cv2.boundingRect(mask_255)
+    crop_01 = (mask_255[by : by + bh, bx : bx + bw] > 0).astype(np.uint8)
+    expected_hu = cv2.HuMoments(cv2.moments(crop_01, binaryImage=True)).ravel()
+
+    for idx, key in enumerate(("log_hu_1", "log_hu_2", "log_hu_3")):
+        hu_val = float(expected_hu[idx])
+        expected_signed = (
+            -math.copysign(1.0, hu_val) * math.log10(abs(hu_val) + 1e-12)
+            if hu_val != 0.0
+            else 0.0
+        )
+        assert feats[key] == pytest.approx(expected_signed, abs=1e-9)
+    # Without binaryImage=True, log_hu_1 shifted by +2.4065 (~3.1 instead of ~0.7).
+    assert abs(feats["log_hu_1"]) < 1.5
+    assert abs(feats["log_hu_3"]) < 10.0
+
+
+def test_degenerate_thin_tiny_and_disconnected_masks_stay_bounded() -> None:
+    """WR-02 regression: 1-px collinear, 1x1, and disconnected masks stay bounded."""
+    bgr = np.full((80, 80, 3), 180, dtype=np.uint8)
+    optical = OpticalContext(4.25, 1.0, True, False, "wide")
+
+    # 1x1 single pixel mask
+    m_1x1 = np.zeros((80, 80), dtype=np.uint8)
+    m_1x1[40, 40] = 255
+    f_1x1 = extract_mask_gated_features(bgr, m_1x1, 0.5, optical)
+    assert 0.0 <= f_1x1["extent_rotrect"] <= 1.0
+    assert 0.0 <= f_1x1["aspect_ratio_ellipse"] <= 10.0
+
+    # 1x20 collinear strip mask
+    m_line = np.zeros((80, 80), dtype=np.uint8)
+    m_line[40, 20:40] = 255
+    f_line = extract_mask_gated_features(bgr, m_line, 0.5, optical)
+    assert 0.0 <= f_line["extent_rotrect"] <= 1.0
+    assert f_line["aspect_ratio_ellipse"] <= 25.0
+
+    # Two disconnected 20x20 squares
+    m_two = np.zeros((80, 80), dtype=np.uint8)
+    m_two[10:30, 10:30] = 255
+    m_two[50:70, 50:70] = 255
+    f_two = extract_mask_gated_features(bgr, m_two, 0.5, optical)
+    assert 0.0 <= f_two["extent_rotrect"] <= 1.0
+
+
+def test_exif_focal_bounds_and_pdi_config_float_normalization() -> None:
+    """CR-02 & WR-04 regressions: EXIF focal bounds [0.5, 200] & PDIConfig hash normalization."""
+    from backend.app.pdi.config import PDIConfig
+    from backend.app.pdi.io_exif import ExifMetadata, _parse_focal_length, resolve_optical_context
+
+    assert _parse_focal_length(999_999_999.0) is None
+    assert _parse_focal_length(1e-7) is None
+    assert _parse_focal_length(0.49) is None
+    assert _parse_focal_length(200.1) is None
+    assert _parse_focal_length(4.25) == pytest.approx(4.25)
+
+    bad_meta = ExifMetadata(
+        raw_w=100,
+        raw_h=100,
+        oriented_w=100,
+        oriented_h=100,
+        exif_orientation=1,
+        focal_length_mm=1e200,
+        zoom_multiple=100.0,
+        has_exif_optical=True,
+    )
+    resolved = resolve_optical_context(bad_meta)
+    assert resolved.focal_length_mm == pytest.approx(4.25)
+    assert resolved.zoom_multiple == pytest.approx(1.0)
+    assert resolved.exif_optical_present is False
+
+    assert PDIConfig(clahe_clip_limit=2).config_hash() == PDIConfig(
+        clahe_clip_limit=2.0
+    ).config_hash()
+    with pytest.raises(ValueError, match="watershed_h_rel"):
+        PDIConfig(watershed_h_rel=0.01)
+    with pytest.raises(ValueError, match="watershed_min_distance_rel"):
+        PDIConfig(watershed_min_distance_rel=5.0)
+    with pytest.raises(ValueError, match="watershed_min_area_ratio"):
+        PDIConfig(watershed_min_area_ratio=0.0)

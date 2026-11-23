@@ -485,6 +485,15 @@ def test_write_calibration_audit_rejects_proibicao_4_leak_markers(
     assert not target.exists()
 
 
+@pytest.mark.parametrize("bad_rel", [None, float("nan"), 12345])
+def test_asvs_v4_rejects_non_string_manifest_rel_path(tmp_path: Path, bad_rel: Any) -> None:
+    """WR-06 regression: non-string/None/NaN rel_path raises ASVS V4 ValueError directly."""
+    dataset_root = tmp_path / "root"
+    dataset_root.mkdir()
+    with pytest.raises(ValueError, match="ASVS V4"):
+        extract_features._resolve_safe_image_path(bad_rel, dataset_root.resolve())
+
+
 def test_real_features_clean_parquet_schema_alignment_finite_values_and_fallback_gate() -> None:
     """Read-only Phase 2 real-corpus gate over materialized features_clean.parquet (D-07..D-10)."""
     assert FEATURES_CLEAN_PATH.is_file(), "data/processed/features_clean.parquet must exist"

@@ -120,14 +120,16 @@ def _validate_bounded_float(
 
 
 def _parse_focal_length(raw: Any) -> float | None:
-    """Safely convert an EXIF FocalLength (e.g., IFDRational) to positive finite mm."""
+    """Safely convert an EXIF FocalLength (e.g., IFDRational) to bounded positive mm."""
     if raw is None or isinstance(raw, bool):
         return None
     try:
         value = float(raw)
     except (TypeError, ValueError, ZeroDivisionError):
         return None
-    if not math.isfinite(value) or value <= 0.0:
+    if not math.isfinite(value) or not (
+        MIN_VALID_FOCAL_LENGTH_MM <= value <= MAX_VALID_FOCAL_LENGTH_MM
+    ):
         return None
     return value
 
@@ -173,16 +175,26 @@ def _parse_xiaomi_zoom(raw: Any) -> float | None:
 
 def _extract_exif_from_open_image(im: Image.Image) -> ExifMetadata:
     """Extract orientation, optical EXIF tags, and pre/post-transpose dimensions."""
-    exif = im.getexif()
-    raw_orient = exif.get(EXIF_TAG_ORIENTATION, 1)
-    if isinstance(raw_orient, int) and not isinstance(raw_orient, bool) and 1 <= raw_orient <= 8:
-        orientation = int(raw_orient)
-    else:
-        orientation = 1
+    orientation = 1
+    focal_length_mm: float | None = None
+    zoom_multiple: float | None = None
+    try:
+        exif = im.getexif()
+        raw_orient = exif.get(EXIF_TAG_ORIENTATION, 1)
+        if (
+            isinstance(raw_orient, int)
+            and not isinstance(raw_orient, bool)
+            and 1 <= raw_orient <= 8
+        ):
+            orientation = int(raw_orient)
 
-    ifd = exif.get_ifd(EXIF_IFD_POINTER)
-    focal_length_mm = _parse_focal_length(ifd.get(EXIF_TAG_FOCAL_LENGTH))
-    zoom_multiple = _parse_xiaomi_zoom(ifd.get(XIAOMI_TAG_JSON))
+        ifd = exif.get_ifd(EXIF_IFD_POINTER)
+        focal_length_mm = _parse_focal_length(ifd.get(EXIF_TAG_FOCAL_LENGTH))
+        zoom_multiple = _parse_xiaomi_zoom(ifd.get(XIAOMI_TAG_JSON))
+    except (OSError, ValueError, TypeError, ZeroDivisionError, KeyError, SyntaxError):
+        orientation = 1
+        focal_length_mm = None
+        zoom_multiple = None
 
     raw_w, raw_h = im.size
     if orientation in TRANSPOSE_SWAP_ORIENTATIONS:
@@ -265,25 +277,38 @@ def resolve_optical_context(
                 max_value=MAX_VALID_ZOOM_MULTIPLE,
             )
 
+    meta_focal = _parse_focal_length(metadata.focal_length_mm)
+    meta_zoom: float | None = None
+    if metadata.zoom_multiple is not None and not isinstance(metadata.zoom_multiple, bool):
+        try:
+            mz = float(metadata.zoom_multiple)
+            if math.isfinite(mz) and MIN_VALID_ZOOM_MULTIPLE <= mz <= MAX_VALID_ZOOM_MULTIPLE:
+                meta_zoom = mz
+        except (TypeError, ValueError):
+            meta_zoom = None
+
     if override_focal is not None:
         focal_length_mm = override_focal
-    elif metadata.focal_length_mm is not None:
-        focal_length_mm = metadata.focal_length_mm
+    elif meta_focal is not None:
+        focal_length_mm = meta_focal
     else:
         focal_length_mm = valid_default_focal
 
     if override_zoom is not None:
         zoom_multiple = override_zoom
-    elif metadata.zoom_multiple is not None:
-        zoom_multiple = metadata.zoom_multiple
+    elif meta_zoom is not None:
+        zoom_multiple = meta_zoom
     else:
         zoom_multiple = valid_default_zoom
 
     override_applied = bool(override_focal is not None or override_zoom is not None)
+    exif_optical_present = bool(
+        metadata.has_exif_optical and meta_focal is not None and meta_zoom is not None
+    )
     return OpticalContext(
         focal_length_mm=focal_length_mm,
         zoom_multiple=zoom_multiple,
-        exif_optical_present=bool(metadata.has_exif_optical),
+        exif_optical_present=exif_optical_present,
         override_applied=override_applied,
         lens_class=classify_lens(focal_length_mm),
     )
