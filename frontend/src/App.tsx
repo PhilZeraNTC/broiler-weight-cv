@@ -1,7 +1,10 @@
 import { useCallback, useEffect, useState } from "react";
-import { AppShell, TAB_ITEMS, type TabId } from "./components/layout/AppShell.tsx";
+import { AppShell, type TabId } from "./components/layout/AppShell.tsx";
 import { InlineErrorBanner } from "./components/layout/InlineErrorBanner.tsx";
+import { XRayStudioTab } from "./components/studio/XRayStudioTab.tsx";
+import { FutureVisionTab } from "./components/vision/FutureVisionTab.tsx";
 import { useHealth, usePresets } from "./hooks/useStudioHooks.ts";
+import { cn } from "./lib/cn.ts";
 import { pluralizePtBr } from "./lib/format.ts";
 
 const VALID_HASH_TO_TAB: Readonly<Record<string, TabId>> = {
@@ -24,7 +27,7 @@ function getInitialTab(): TabId {
 
 export default function App() {
   const [activeTab, setActiveTab] = useState<TabId>(getInitialTab);
-  const [lastLatencyMs] = useState<number | null>(null);
+  const [lastLatencyMs, setLastLatencyMs] = useState<number | null>(null);
   const { health, status: healthStatus, refresh: refreshHealth } = useHealth();
   const {
     presets,
@@ -54,7 +57,8 @@ export default function App() {
     return () => window.removeEventListener("hashchange", handleHashChange);
   }, []);
 
-  const currentTabConfig = TAB_ITEMS.find((item) => item.id === activeTab) ?? TAB_ITEMS[0];
+  const singleBirdPresets = presets?.single_bird_presets ?? [];
+  const watershedPresets = presets?.watershed_presets ?? [];
 
   return (
     <AppShell
@@ -78,60 +82,76 @@ export default function App() {
           />
         ) : null}
 
+        {/* Tab 1: Estúdio Raio-X (kept mounted across tab switches to preserve analysis & simulated flock) */}
         <section
           role="tabpanel"
-          id={`panel-${activeTab}`}
-          aria-labelledby={`tab-${activeTab}`}
-          className="rounded-xl border border-border bg-surface p-6"
+          id="panel-estudio"
+          aria-labelledby="tab-estudio"
+          hidden={activeTab !== "estudio"}
+          className={cn(activeTab !== "estudio" && "hidden")}
         >
-          <div className="flex flex-wrap items-start justify-between gap-4 border-b border-border pb-4">
-            <div className="space-y-1">
-              <p className="text-[12px] font-semibold leading-[1.33] uppercase tracking-wide text-ink-muted">
-                AvianScale CV · Módulo Ativo
-              </p>
-              <h1 className="text-[20px] font-semibold leading-[1.2] text-ink">
-                {currentTabConfig.label}
-              </h1>
-            </div>
-            {health ? (
-              <span className="rounded-full border border-border bg-surface-subtle px-3 py-1 font-mono text-[12px] font-semibold leading-[1.33] tabular-nums text-ink-muted">
-                {health.pdi_config_hash}
-              </span>
-            ) : null}
+          <XRayStudioTab
+            presets={singleBirdPresets}
+            presetsLoading={presetsLoading}
+            onLatency={setLastLatencyMs}
+          />
+        </section>
+
+        {/* Tab 2: Separação Watershed (Wave 4 mount slot) */}
+        <section
+          role="tabpanel"
+          id="panel-watershed"
+          aria-labelledby="tab-watershed"
+          hidden={activeTab !== "watershed"}
+          className={cn(activeTab !== "watershed" && "hidden")}
+        >
+          <div className="rounded-xl border border-border bg-surface p-6">
+            <p className="text-[12px] font-semibold leading-[1.33] uppercase tracking-wide text-ink-muted">
+              Módulo Multi-Aves · Marker-based Watershed Clássico
+            </p>
+            <h1 className="mt-1 text-[20px] font-semibold leading-[1.2] text-ink">
+              Separação Watershed
+            </h1>
+            <p className="mt-2 text-[14px] font-normal leading-[1.5] text-ink-muted">
+              {presetsLoading
+                ? "Carregando presets multi-aves..."
+                : `${pluralizePtBr(watershedPresets.length, "cena curada disponível", "cenas curadas disponíveis")} para separação clássica via Transformada de Distância (EDT).`}
+            </p>
           </div>
+        </section>
 
-          <div className="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-3">
-            <div className="rounded-lg border border-border bg-canvas p-4">
-              <p className="text-[12px] font-semibold leading-[1.33] text-ink-muted">
-                Presets de Ave Única (OOF)
-              </p>
-              <p className="mt-1 text-[32px] font-semibold leading-[1.2] tabular-nums text-ink">
-                {presetsLoading
-                  ? "—"
-                  : pluralizePtBr(presets?.single_bird_presets.length ?? 0, "preset", "presets")}
-              </p>
-            </div>
-
-            <div className="rounded-lg border border-border bg-canvas p-4">
-              <p className="text-[12px] font-semibold leading-[1.33] text-ink-muted">
-                Presets Watershed Multi-Aves
-              </p>
-              <p className="mt-1 text-[32px] font-semibold leading-[1.2] tabular-nums text-ink">
-                {presetsLoading
-                  ? "—"
-                  : pluralizePtBr(presets?.watershed_presets.length ?? 0, "cena", "cenas")}
-              </p>
-            </div>
-
-            <div className="rounded-lg border border-border bg-canvas p-4">
-              <p className="text-[12px] font-semibold leading-[1.33] text-ink-muted">
-                Atributos PDI Auditados
-              </p>
-              <p className="mt-1 text-[32px] font-semibold leading-[1.2] tabular-nums text-ink">
-                {health ? pluralizePtBr(health.n_features, "atributo", "atributos") : "—"}
-              </p>
-            </div>
+        {/* Tab 3: Auditoria & Métricas (Wave 4 mount slot) */}
+        <section
+          role="tabpanel"
+          id="panel-metricas"
+          aria-labelledby="tab-metricas"
+          hidden={activeTab !== "metricas"}
+          className={cn(activeTab !== "metricas" && "hidden")}
+        >
+          <div className="rounded-xl border border-border bg-surface p-6">
+            <p className="text-[12px] font-semibold leading-[1.33] uppercase tracking-wide text-ink-muted">
+              Validação Cruzada 5-Fold · Ablação Óptica C1–C4
+            </p>
+            <h1 className="mt-1 text-[20px] font-semibold leading-[1.2] text-ink">
+              Auditoria &amp; Métricas
+            </h1>
+            <p className="mt-2 text-[14px] font-normal leading-[1.5] text-ink-muted">
+              Painel científico de validação OOF pronto para conexão ao relatório de avaliação
+              (1.738 imagens · 188 sessões ·{" "}
+              {health ? `${health.n_features} atributos` : "39 atributos"}).
+            </p>
           </div>
+        </section>
+
+        {/* Tab 4: Visão Futura (v2) — 100% static conceptual documentation (PROIBIÇÃO 5) */}
+        <section
+          role="tabpanel"
+          id="panel-visao-futura"
+          aria-labelledby="tab-visao-futura"
+          hidden={activeTab !== "visao-futura"}
+          className={cn(activeTab !== "visao-futura" && "hidden")}
+        >
+          <FutureVisionTab />
         </section>
       </div>
     </AppShell>
