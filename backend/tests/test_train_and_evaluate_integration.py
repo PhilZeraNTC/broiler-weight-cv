@@ -62,8 +62,9 @@ from backend.app.modeling.artifacts import (
 )
 from backend.app.modeling.datasets import LoadedModelingDataset, load_modeling_dataset
 from backend.app.modeling.evaluation import FullEvaluationResult, evaluate_single_candidate
+from backend.app.modeling.models import predict_from_feature_dict
 from backend.app.pdi.config import PDIConfig
-from backend.app.pdi.features import FEATURE_COLUMNS
+from backend.app.pdi.features import BANNED_FEATURE_COLUMNS, FEATURE_COLUMNS
 from backend.scripts import train_and_evaluate
 
 _FORBIDDEN_LEAK_MARKERS: tuple[str, ...] = (
@@ -827,3 +828,293 @@ def test_ast_scan_train_and_evaluate_prohibitions_and_no_main_classes() -> None:
                 elif isinstance(func, ast.Attribute):
                     assert func.attr not in banned_splitters
                     assert func.attr not in banned_cv_loaders
+
+
+def test_real_materialized_model_bundle_subprocess_joblib_and_latency(tmp_path: Path) -> None:
+    """D-07 real-corpus gate: clean-subprocess joblib.load() + < 5 ms single-row prediction."""
+    assert MODEL_BUNDLE_PATH.is_file(), "models/weight_regressor.joblib must exist on disk"
+    assert FEATURES_CLEAN_PATH.is_file(), "data/processed/features_clean.parquet must exist"
+
+    features_df = pd.read_parquet(FEATURES_CLEAN_PATH)
+    sample_row = {col: float(features_df.iloc[0][col]) for col in FEATURE_COLUMNS}
+
+    c2_forbidden = sorted(
+        BANNED_FEATURE_COLUMNS
+        | {
+            "focal_length_mm",
+            "zoom_multiple",
+            "exif_optical_present",
+            "area_px",
+            "perimeter_px",
+            "major_axis_px",
+            "minor_axis_px",
+            "convex_area_px",
+            "area_frac",
+            "area_frac_optical_norm",
+        }
+    )
+
+    sub_code = (
+        "import json, math, time\n"
+        "from pathlib import Path\n"
+        "from backend.app.config import MODEL_BUNDLE_PATH\n"
+        "from backend.app.modeling import load_model_bundle, predict_from_feature_dict\n"
+        "from backend.app.pdi.config import PDIConfig\n"
+        "expected_hash = PDIConfig().config_hash()\n"
+        "bundle = load_model_bundle(MODEL_BUNDLE_PATH, expected_pdi_config_hash=expected_hash)\n"
+        "assert bundle['schema_version'] == '1.0.0'\n"
+        "assert bundle['pdi_config_hash'] == '43a3cfaa3208019e'\n"
+        "assert bundle['winning_model_name'] == 'LightGBMLog'\n"
+        "assert bundle['winning_ablation_condition'] == 'C2_physics_normalized_strict'\n"
+        "fn = bundle['feature_names']\n"
+        "assert isinstance(fn, tuple) and len(fn) == 39\n"
+        f"forbidden = set({c2_forbidden!r})\n"
+        "assert forbidden.isdisjoint(fn)\n"
+        "assert set(bundle['fold_pipelines'].keys()) == {0, 1, 2, 3, 4}\n"
+        "assert set(bundle['band_error_intervals'].keys()) == {'<500g', '500-1000g', '>1000g'}\n"
+        "assert bundle['valid_weight_range_g'] == {'min': 116, 'max': 2093}\n"
+        "assert bundle['valid_age_days_range'] == '~7-29 days'\n"
+        f"row = json.loads({json.dumps(sample_row)!r})\n"
+        "_ = predict_from_feature_dict(bundle['production_pipeline'], fn, row)\n"
+        "t0 = time.perf_counter()\n"
+        "y_prod = predict_from_feature_dict(bundle['production_pipeline'], fn, row)\n"
+        "prod_ms = (time.perf_counter() - t0) * 1000.0\n"
+        "t1 = time.perf_counter()\n"
+        "y_fold0 = predict_from_feature_dict(bundle['fold_pipelines'][0], fn, row)\n"
+        "fold0_ms = (time.perf_counter() - t1) * 1000.0\n"
+        "assert math.isfinite(y_prod) and y_prod > 0.0\n"
+        "assert math.isfinite(y_fold0) and y_fold0 > 0.0\n"
+        "assert prod_ms < 5.0, f'production_pipeline latency {prod_ms:.3f} ms >= 5.0 ms'\n"
+        "assert fold0_ms < 5.0, f'fold_pipelines[0] latency {fold0_ms:.3f} ms >= 5.0 ms'\n"
+        "print(json.dumps({'y_prod': y_prod, 'y_fold0': y_fold0, "
+        "'prod_ms': prod_ms, 'fold0_ms': fold0_ms}))\n"
+    )
+    proc = subprocess.run(
+        [sys.executable, "-W", "error::UserWarning", "-c", sub_code],
+        cwd=tmp_path,
+        env={**os.environ, "PYTHONPATH": str(REPO_ROOT)},
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    out = json.loads(proc.stdout.strip())
+    assert out["prod_ms"] < 5.0
+    assert out["fold0_ms"] < 5.0
+
+
+def test_real_materialized_evaluation_report_json_contract_and_zero_leakage() -> None:
+    """D-09 real-corpus gate: git-tracked evaluation_report.json schema, proof & PROIBIÇÃO 4."""
+    assert EVALUATION_REPORT_PATH.is_file(), "models/evaluation_report.json must exist"
+
+    raw_text = EVALUATION_REPORT_PATH.read_text(encoding="utf-8")
+    lowered = raw_text.lower()
+    for forbidden in _FORBIDDEN_LEAK_MARKERS:
+        assert forbidden not in lowered, (
+            f"PROIBIÇÃO 4 violation: forbidden token {forbidden!r} in evaluation_report.json"
+        )
+    assert "wall_clock_sec" not in raw_text
+
+    report = json.loads(raw_text)
+    assert report["schema_version"] == EVALUATION_REPORT_SCHEMA_VERSION
+    assert report["pdi_config_hash"] == "43a3cfaa3208019e"
+
+    ds = report["dataset_summary"]
+    assert ds["n_clean_images"] == 1738
+    assert ds["n_unique_weights"] == 160
+    assert ds["n_sessions"] == 188
+    assert ds["n_folds"] == 5
+    assert ds["cross_fold_session_overlap"] == 0
+    assert ds["n_mixed_lens_sessions"] == 127
+    assert ds["weight_min_g"] == 116
+    assert ds["weight_max_g"] == 2093
+    assert ds["valid_age_days_range"] == "~7-29 days"
+
+    assert report["literature_benchmark"]["r2_reference"] == 0.90
+    assert len(report["model_comparison"]) == 16
+    assert len(report["mechanics_ablation"]) == 4
+    assert len(report["allometric_log_ablation"]) == 4
+
+    scatter = report["oof_scatter_points"]
+    assert len(scatter) == 1738
+    scatter_ids = [str(pt["image_id"]) for pt in scatter]
+    assert scatter_ids == sorted(scatter_ids)
+    assert len(set(scatter_ids)) == 1738
+
+    win = report["winning_model"]
+    assert win["model_name"] == "LightGBMLog"
+    assert win["ablation_condition"] == "C2_physics_normalized_strict"
+    assert win["n_features"] == 39
+    assert len(win["feature_names"]) == 39
+    assert win["global"]["r2"] is not None
+    assert win["global"]["session_averaged_r2"] is not None
+    assert win["global"]["session_averaged_r2"] > win["global"]["r2"] > 0.50
+    assert win["session_level"]["session_averaged_r2"] == win["global"]["session_averaged_r2"]
+
+    assert len(win["per_fold"]) == 5
+    assert set(win["by_weight_band"].keys()) == {"<500g", "500-1000g", ">1000g"}
+    assert set(win["by_lens"].keys()) == {"wide", "ultrawide"}
+    assert set(win["by_scene"].keys()) == {"bucket_dorsal", "scale_or_litter"}
+    assert len(win["by_band_and_scene"]) == 6
+    assert len(win["by_band_and_lens"]) == 6
+    assert set(win["band_error_intervals"].keys()) == {"<500g", "500-1000g", ">1000g"}
+
+    imp_sum = sum(float(item["importance_pct"]) for item in win["feature_importances"])
+    assert len(win["feature_importances"]) == 39
+    assert imp_sum == pytest.approx(100.0, abs=0.1)
+
+    opt = report["optical_ablation"]
+    c2_delta = opt["deltas_vs_c1"]["C2_physics_normalized_strict"]
+    assert c2_delta["delta_mae_g"] < 0.0
+    assert c2_delta["delta_rmse_g"] < 0.0
+    assert c2_delta["delta_balanced_band_mape_pct"] < 0.0
+    assert c2_delta["delta_r2"] > 0.0
+
+    cf = opt["counterfactual_lens_flip"]
+    c2_cf = cf["C2_physics_normalized_strict"]
+    assert c2_cf["focal_only"]["median_shift_pct"] == 0.0
+    assert c2_cf["physical_lens_swap"]["median_shift_pct"] == 0.0
+    assert c2_cf["physical_lens_swap"]["p90_shift_pct"] == 0.0
+    assert c2_cf["lens_confounding_detected"] is False
+
+    assert cf["C3_physics_plus_exif_meta"]["lens_confounding_detected"] is True
+    assert cf["C4_naive_double_count_fxz"]["lens_confounding_detected"] is True
+
+    by_pair = {
+        (row["model_name"], row["ablation_condition"]): row for row in report["model_comparison"]
+    }
+    assert by_pair[("LightGBMLog", "C2_physics_normalized_strict")]["is_winner"] is True
+    assert by_pair[("LightGBMLog", "C2_physics_normalized_strict")]["eligible_for_production"]
+    assert by_pair[("LightGBMLog", "C3_physics_plus_exif_meta")]["eligible_for_production"] is False
+    assert by_pair[("LightGBMLog", "C4_naive_double_count_fxz")]["eligible_for_production"] is False
+
+
+def test_real_materialized_presets_catalog_json_contract_and_live_oof_parity() -> None:
+    """D-10 real-corpus gate: opaque-ID presets_catalog.json + live fold_pipelines OOF parity."""
+    assert PRESETS_CATALOG_PATH.is_file(), "models/presets_catalog.json must exist"
+    assert MODEL_BUNDLE_PATH.is_file(), "models/weight_regressor.joblib must exist"
+    assert CLEAN_MANIFEST_PATH.is_file()
+    assert QUARANTINE_MANIFEST_PATH.is_file()
+    assert FEATURES_CLEAN_PATH.is_file()
+
+    raw_text = PRESETS_CATALOG_PATH.read_text(encoding="utf-8")
+    lowered = raw_text.lower()
+    for forbidden in _FORBIDDEN_LEAK_MARKERS:
+        assert forbidden not in lowered, (
+            f"PROIBIÇÃO 4 violation: forbidden token {forbidden!r} in presets_catalog.json"
+        )
+
+    catalog = json.loads(raw_text)
+    assert catalog["schema_version"] == PRESETS_CATALOG_SCHEMA_VERSION
+    assert catalog["pdi_config_hash"] == "43a3cfaa3208019e"
+    assert catalog["winning_model_name"] == "LightGBMLog"
+    assert catalog["winning_ablation_condition"] == "C2_physics_normalized_strict"
+
+    clean_manifest = pd.read_parquet(CLEAN_MANIFEST_PATH)
+    clean_features = pd.read_parquet(FEATURES_CLEAN_PATH).set_index("image_id", drop=False)
+    clean_ids = set(clean_manifest["image_id"].astype(str).tolist())
+
+    bundle = load_model_bundle(
+        MODEL_BUNDLE_PATH,
+        expected_pdi_config_hash=PDIConfig().config_hash(),
+    )
+    feature_names = bundle["feature_names"]
+
+    sb_presets = catalog["single_bird_presets"]
+    assert len(sb_presets) == 6
+    assert [p["preset_id"] for p in sb_presets] == [
+        "sb_young_chick",
+        "sb_intermediate_grower",
+        "sb_heavy_broiler",
+        "sb_hard_white_bucket",
+        "sb_dual_lens_wide",
+        "sb_dual_lens_ultrawide",
+    ]
+    assert len({p["image_id"] for p in sb_presets}) == 6
+    assert {int(p["fold"]) for p in sb_presets} == {0, 1, 2, 3, 4}
+
+    for preset in sb_presets:
+        img_id = str(preset["image_id"])
+        assert img_id in clean_ids
+        feat_row = clean_features.loc[img_id]
+        assert bool(feat_row["segmentation_fallback"]) is False
+        assert float(preset["oof_pct_err"]) >= 3.0
+
+        # Live held-out fold_pipelines[fold] prediction must match stored oof_predicted_g.
+        fold_idx = int(preset["fold"])
+        feature_dict = {col: float(feat_row[col]) for col in feature_names}
+        live_pred = predict_from_feature_dict(
+            bundle["fold_pipelines"][fold_idx],
+            feature_names,
+            feature_dict,
+        )
+        assert abs(live_pred - float(preset["oof_predicted_g"])) <= 0.05, (
+            f"Preset {preset['preset_id']} live OOF mismatch: "
+            f"{live_pred:.4f} vs {preset['oof_predicted_g']}"
+        )
+
+    # Validate same-session dual-lens pair contract.
+    dl_wide = sb_presets[4]
+    dl_uw = sb_presets[5]
+    assert dl_wide["pair_group_id"] == "dual_lens_pair"
+    assert dl_uw["pair_group_id"] == "dual_lens_pair"
+    assert dl_wide["session_id"] == dl_uw["session_id"]
+    assert dl_wide["fold"] == dl_uw["fold"]
+    assert dl_wide["lens_class"] == "wide"
+    assert dl_uw["lens_class"] == "ultrawide"
+    assert len({p["session_id"] for p in sb_presets[:5]}) == 5
+
+    # Validate 4 multi-bird Watershed presets against manifest_quarantine.parquet.
+    q_df = pd.read_parquet(QUARANTINE_MANIFEST_PATH)
+    q_multi_ids = set(
+        q_df.loc[q_df["quarantine_reason"].astype(str) == "multi_bird", "image_id"]
+        .astype(str)
+        .tolist()
+    )
+    ws_presets = catalog["watershed_presets"]
+    assert len(ws_presets) == 4
+    assert [p["preset_id"] for p in ws_presets] == ["ws_417", "ws_757", "ws_823", "ws_1520"]
+
+    ws_by_id = {p["preset_id"]: p for p in ws_presets}
+    for preset in ws_presets:
+        assert str(preset["image_id"]) in q_multi_ids
+        assert preset["ground_truth_scope"] == "group_sum_only"
+        assert isinstance(preset["disclaimer"], str) and len(preset["disclaimer"]) > 20
+
+    assert ws_by_id["ws_417"]["detected_bird_count_default"] == 2
+    assert ws_by_id["ws_823"]["detected_bird_count_default"] == 4
+    assert ws_by_id["ws_1520"]["detected_bird_count_default"] == 2
+
+
+def test_git_hygiene_ignores_joblib_tracks_phase3_json_and_excludes_raw_processed() -> None:
+    """PROIBIÇÃO 4 git hygiene: weight_regressor.joblib ignored; Phase 3 JSONs trackable."""
+    ignored_joblib = subprocess.run(
+        ["git", "check-ignore", "models/weight_regressor.joblib"],
+        cwd=REPO_ROOT,
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    assert ignored_joblib.returncode == 0, (
+        "models/weight_regressor.joblib MUST be ignored by .gitignore."
+    )
+
+    for json_rel in ("models/evaluation_report.json", "models/presets_catalog.json"):
+        ignored_json = subprocess.run(
+            ["git", "check-ignore", json_rel],
+            cwd=REPO_ROOT,
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+        assert ignored_json.returncode != 0, f"{json_rel} MUST NOT be ignored by .gitignore."
+
+    tracked_forbidden = subprocess.run(
+        ["git", "ls-files", "data/raw", "data/processed", "models/*.joblib"],
+        cwd=REPO_ROOT,
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    assert tracked_forbidden.stdout.strip() == "", (
+        "PROIBIÇÃO 4 violation: data/raw, data/processed, or models/*.joblib tracked by Git."
+    )
