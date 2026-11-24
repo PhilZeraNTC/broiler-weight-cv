@@ -368,6 +368,32 @@ export function WatershedSlidersCard({
           </div>
         </div>
 
+        {/* Always-visible missing-EXIF fallback disclosure when an upload lacks EXIF optical tags */}
+        {optical && !optical.exif_optical_present ? (
+          <div
+            role="note"
+            className="flex items-start gap-2 rounded-lg border border-warning-border bg-warning-tint p-4 text-warning"
+          >
+            <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
+            <div className="space-y-2">
+              <p className="text-[14px] font-normal leading-[1.5]">
+                Metadados ópticos EXIF ausentes nesta imagem — aplicando padrão Wide (4,25 mm · zoom
+                1,0×). Se a foto foi capturada em lente Ultrawide, ajuste a calibração óptica abaixo
+                e clique em 'Reprocessar Watershed'.
+              </p>
+              {!opticalOpen ? (
+                <button
+                  type="button"
+                  onClick={() => setOpticalOpen(true)}
+                  className="inline-flex min-h-[44px] items-center rounded-lg border border-warning-border bg-surface px-4 text-[12px] font-semibold leading-[1.33] text-warning transition-colors hover:bg-warning-tint"
+                >
+                  Abrir Calibração Óptica
+                </button>
+              ) : null}
+            </div>
+          </div>
+        ) : null}
+
         {/* Optional collapsible optical calibration override section */}
         <div className="rounded-lg border border-border bg-surface-subtle/60">
           <button
@@ -386,20 +412,6 @@ export function WatershedSlidersCard({
 
           {opticalOpen ? (
             <div className="space-y-4 border-t border-border bg-surface p-4">
-              {optical && !optical.exif_optical_present ? (
-                <div
-                  role="note"
-                  className="flex items-start gap-2 rounded-lg border border-warning-border bg-warning-tint p-4 text-warning"
-                >
-                  <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
-                  <p className="text-[14px] font-normal leading-[1.5]">
-                    Metadados ópticos EXIF ausentes nesta imagem — aplicando padrão Wide (4,25 mm ·
-                    zoom 1,0×). Se a foto foi capturada em lente Ultrawide, ajuste os controles de
-                    calibração e clique em 'Recalibrar Óptica'.
-                  </p>
-                </div>
-              ) : null}
-
               <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
                 <button
                   type="button"

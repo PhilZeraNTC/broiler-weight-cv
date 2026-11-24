@@ -15,6 +15,13 @@ const VALID_HASH_TO_TAB: Readonly<Record<string, TabId>> = {
   "#visao-futura": "visao-futura",
 };
 
+const VALID_PATH_TO_TAB: Readonly<Record<string, TabId>> = {
+  "/estudio": "estudio",
+  "/watershed": "watershed",
+  "/metricas": "metricas",
+  "/visao-futura": "visao-futura",
+};
+
 function parseTabFromHash(hash: string): TabId {
   return VALID_HASH_TO_TAB[hash] ?? "estudio";
 }
@@ -23,7 +30,12 @@ function getInitialTab(): TabId {
   if (typeof window === "undefined") {
     return "estudio";
   }
-  return parseTabFromHash(window.location.hash);
+  const fromHash = VALID_HASH_TO_TAB[window.location.hash];
+  if (fromHash) {
+    return fromHash;
+  }
+  const normalizedPath = window.location.pathname.replace(/\/+$/, "") || "/";
+  return VALID_PATH_TO_TAB[normalizedPath] ?? "estudio";
 }
 
 export default function App() {
