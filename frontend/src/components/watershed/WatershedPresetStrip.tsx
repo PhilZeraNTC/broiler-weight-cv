@@ -1,5 +1,5 @@
 import { ImageOff, ImageUp, Upload } from "lucide-react";
-import { type ChangeEvent, type DragEvent, useRef, useState } from "react";
+import { type ChangeEvent, type DragEvent, type RefObject, useRef, useState } from "react";
 import { ApiError, validateClientUploadFile } from "../../lib/api.ts";
 import { cn } from "../../lib/cn.ts";
 import { formatGrams, pluralizePtBr } from "../../lib/format.ts";
@@ -12,6 +12,7 @@ export interface WatershedPresetStripProps {
   activePresetId: string | null;
   activeFileName: string | null;
   loading: boolean;
+  fileInputRef?: RefObject<HTMLInputElement | null>;
   onSelectPreset: (presetId: string) => void;
   onSelectFile: (file: File) => void;
   onValidationError: (error: ApiError) => void;
@@ -31,11 +32,13 @@ export function WatershedPresetStrip({
   activePresetId,
   activeFileName,
   loading,
+  fileInputRef,
   onSelectPreset,
   onSelectFile,
   onValidationError,
 }: WatershedPresetStripProps) {
-  const inputRef = useRef<HTMLInputElement | null>(null);
+  const internalInputRef = useRef<HTMLInputElement | null>(null);
+  const inputRef = fileInputRef ?? internalInputRef;
   const [isDragging, setIsDragging] = useState<boolean>(false);
   const [failedThumbnails, setFailedThumbnails] = useState<ReadonlySet<string>>(() => new Set());
 

@@ -43,14 +43,20 @@ export function XRayStudioTab({ presets, presetsLoading, onLatency }: XRayStudio
   const [dualLensOpen, setDualLensOpen] = useState<boolean>(false);
   const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
 
-  const lastOverrideRef = useRef<OpticalOverrideValues | undefined>(undefined);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const lastAttemptRef = useRef<{
+    source: ActiveInferenceSource;
+    override?: OpticalOverrideValues;
+  }>({
+    source: { type: "preset", presetId: DEFAULT_BOOT_PRESET_ID },
+  });
   const onLatencyRef = useRef(onLatency);
   onLatencyRef.current = onLatency;
 
   const executePredict = useCallback(
     (source: ActiveInferenceSource, override?: OpticalOverrideValues) => {
       setClientError(null);
-      lastOverrideRef.current = override;
+      lastAttemptRef.current = { source, override };
 
       void run((signal) =>
         predictSingleBird(
@@ -64,6 +70,7 @@ export function XRayStudioTab({ presets, presetsLoading, onLatency }: XRayStudio
         ),
       ).then((result) => {
         if (result) {
+          setActiveSource(source);
           onLatencyRef.current(result.timing.total_ms);
         }
       });
@@ -78,22 +85,18 @@ export function XRayStudioTab({ presets, presetsLoading, onLatency }: XRayStudio
 
   const handleSelectPreset = useCallback(
     (presetId: string) => {
-      const nextSource: ActiveInferenceSource = { type: "preset", presetId };
-      setActiveSource(nextSource);
-      executePredict(nextSource);
+      executePredict({ type: "preset", presetId });
     },
     [executePredict],
   );
 
   const handleSelectFile = useCallback(
     (file: File) => {
-      const nextSource: ActiveInferenceSource = {
+      executePredict({
         type: "upload",
         file,
         fileName: file.name,
-      };
-      setActiveSource(nextSource);
-      executePredict(nextSource);
+      });
     },
     [executePredict],
   );
@@ -114,8 +117,14 @@ export function XRayStudioTab({ presets, presetsLoading, onLatency }: XRayStudio
   }, [activeSource, executePredict]);
 
   const handleRetry = useCallback(() => {
-    executePredict(activeSource, lastOverrideRef.current);
-  }, [activeSource, executePredict]);
+    executePredict(lastAttemptRef.current.source, lastAttemptRef.current.override);
+  }, [executePredict]);
+
+  const handlePickNewPhoto = useCallback(() => {
+    setClientError(null);
+    clearRequestError();
+    fileInputRef.current?.click();
+  }, [clearRequestError]);
 
   const activePresetMeta = useMemo(() => {
     if (activeSource.type !== "preset") {
@@ -150,14 +159,26 @@ export function XRayStudioTab({ presets, presetsLoading, onLatency }: XRayStudio
   );
 
   const displayedError = clientError ?? requestError;
+  const isUploadFormatOrSizeError =
+    displayedError?.status === 400 ||
+    displayedError?.status === 413 ||
+    displayedError?.status === 415;
   const errorActionLabel =
     displayedError?.status === 422
       ? "Restaurar EXIF Original"
-      : displayedError && (displayedError.status === 0 || displayedError.status >= 500)
-        ? "Tentar Análise Novamente"
-        : undefined;
+      : isUploadFormatOrSizeError
+        ? "Carregar Nova Foto"
+        : displayedError
+          ? "Tentar Análise Novamente"
+          : undefined;
   const errorActionHandler =
-    displayedError?.status === 422 ? handleResetExif : errorActionLabel ? handleRetry : undefined;
+    displayedError?.status === 422
+      ? handleResetExif
+      : isUploadFormatOrSizeError
+        ? handlePickNewPhoto
+        : errorActionLabel
+          ? handleRetry
+          : undefined;
 
   return (
     <div className="space-y-6">
@@ -188,6 +209,7 @@ export function XRayStudioTab({ presets, presetsLoading, onLatency }: XRayStudio
         }
         activeFileName={activeSource.type === "upload" ? activeSource.fileName : null}
         loading={loading}
+        fileInputRef={fileInputRef}
         onSelectFile={handleSelectFile}
         onValidationError={handleValidationError}
       />

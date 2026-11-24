@@ -1,5 +1,5 @@
 import { AlertTriangle, ChevronDown, ChevronUp, RotateCcw, SlidersHorizontal } from "lucide-react";
-import { type FormEvent, type KeyboardEvent, useEffect, useId, useState } from "react";
+import { type FormEvent, type KeyboardEvent, useEffect, useId, useRef, useState } from "react";
 import { formatNumberPtBr } from "../../lib/format.ts";
 import type { OpticalPayload } from "../../types/api.ts";
 
@@ -41,6 +41,7 @@ export interface WatershedOpticalOverride {
 
 export interface WatershedSlidersCardProps {
   values: WatershedSliderValues;
+  committedValues?: WatershedSliderValues;
   optical: OpticalPayload | null;
   opticalOverride: WatershedOpticalOverride | null;
   loading: boolean;
@@ -80,6 +81,7 @@ const SLIDER_COMMIT_KEYS = new Set([
 
 export function WatershedSlidersCard({
   values,
+  committedValues,
   optical,
   opticalOverride,
   loading,
@@ -98,6 +100,13 @@ export function WatershedSlidersCard({
   const [focalInput, setFocalInput] = useState<string>("");
   const [zoomInput, setZoomInput] = useState<string>("");
   const [validationError, setValidationError] = useState<string | null>(null);
+  const lastCommittedRef = useRef<WatershedSliderValues>({ ...(committedValues ?? values) });
+
+  useEffect(() => {
+    if (committedValues) {
+      lastCommittedRef.current = { ...committedValues };
+    }
+  }, [committedValues]);
 
   useEffect(() => {
     if (opticalOverride) {
@@ -169,7 +178,10 @@ export function WatershedSlidersCard({
     };
   };
 
-  const commitSliders = (nextValues: WatershedSliderValues) => {
+  const commitSliders = (
+    nextValues: WatershedSliderValues,
+    { skipIfUnchanged = false }: { skipIfUnchanged?: boolean } = {},
+  ) => {
     if (!hasActiveSource) {
       return;
     }
@@ -190,18 +202,39 @@ export function WatershedSlidersCard({
         WATERSHED_SLIDER_BOUNDS.min_area_ratio[1],
       ),
     };
+    if (
+      skipIfUnchanged &&
+      Math.abs(clamped.h_rel - lastCommittedRef.current.h_rel) < 1e-9 &&
+      Math.abs(clamped.min_distance_rel - lastCommittedRef.current.min_distance_rel) < 1e-9 &&
+      Math.abs(clamped.min_area_ratio - lastCommittedRef.current.min_area_ratio) < 1e-9
+    ) {
+      return;
+    }
     const opticalCheck = resolveOpticalOverrideForSubmit();
     if (!opticalCheck.valid) {
       setValidationError(OUT_OF_RANGE_ERROR_COPY);
       return;
     }
     setValidationError(null);
+    lastCommittedRef.current = clamped;
     onCommit(clamped, opticalCheck.override);
   };
 
-  const handleRangeKeyUp = (event: KeyboardEvent<HTMLInputElement>) => {
+  const commitFieldFromInput = (field: keyof WatershedSliderValues, rawValue: string) => {
+    const liveVal = Number(rawValue);
+    const nextValues: WatershedSliderValues = Number.isFinite(liveVal)
+      ? { ...values, [field]: liveVal }
+      : values;
+    onChangeDraft(nextValues);
+    commitSliders(nextValues, { skipIfUnchanged: true });
+  };
+
+  const handleRangeKeyUp = (
+    field: keyof WatershedSliderValues,
+    event: KeyboardEvent<HTMLInputElement>,
+  ) => {
     if (SLIDER_COMMIT_KEYS.has(event.key)) {
-      commitSliders(values);
+      commitFieldFromInput(field, event.currentTarget.value);
     }
   };
 
@@ -212,6 +245,7 @@ export function WatershedSlidersCard({
 
   const handleReset = () => {
     setValidationError(null);
+    lastCommittedRef.current = { ...WATERSHED_SLIDER_DEFAULTS };
     onResetDefaults();
   };
 
@@ -255,8 +289,8 @@ export function WatershedSlidersCard({
             onChange={(event) => {
               onChangeDraft({ ...values, h_rel: Number(event.target.value) });
             }}
-            onPointerUp={() => commitSliders(values)}
-            onKeyUp={handleRangeKeyUp}
+            onPointerUp={(event) => commitFieldFromInput("h_rel", event.currentTarget.value)}
+            onKeyUp={(event) => handleRangeKeyUp("h_rel", event)}
             className="min-h-[44px] w-full cursor-pointer accent-accent disabled:cursor-not-allowed disabled:opacity-60"
           />
           <div className="flex items-center justify-between text-[12px] font-semibold leading-[1.33] tabular-nums text-ink-muted">
@@ -287,8 +321,10 @@ export function WatershedSlidersCard({
             onChange={(event) => {
               onChangeDraft({ ...values, min_distance_rel: Number(event.target.value) });
             }}
-            onPointerUp={() => commitSliders(values)}
-            onKeyUp={handleRangeKeyUp}
+            onPointerUp={(event) =>
+              commitFieldFromInput("min_distance_rel", event.currentTarget.value)
+            }
+            onKeyUp={(event) => handleRangeKeyUp("min_distance_rel", event)}
             className="min-h-[44px] w-full cursor-pointer accent-accent disabled:cursor-not-allowed disabled:opacity-60"
           />
           <div className="flex items-center justify-between text-[12px] font-semibold leading-[1.33] tabular-nums text-ink-muted">
@@ -319,8 +355,10 @@ export function WatershedSlidersCard({
             onChange={(event) => {
               onChangeDraft({ ...values, min_area_ratio: Number(event.target.value) });
             }}
-            onPointerUp={() => commitSliders(values)}
-            onKeyUp={handleRangeKeyUp}
+            onPointerUp={(event) =>
+              commitFieldFromInput("min_area_ratio", event.currentTarget.value)
+            }
+            onKeyUp={(event) => handleRangeKeyUp("min_area_ratio", event)}
             className="min-h-[44px] w-full cursor-pointer accent-accent disabled:cursor-not-allowed disabled:opacity-60"
           />
           <div className="flex items-center justify-between text-[12px] font-semibold leading-[1.33] tabular-nums text-ink-muted">

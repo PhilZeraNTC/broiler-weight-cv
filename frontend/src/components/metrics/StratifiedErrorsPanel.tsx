@@ -71,10 +71,18 @@ export function ExecutiveAuditKpiStrip({
             {formatNumberPtBr(ds.cross_fold_session_overlap, 0)}
           </p>
           <div className="mt-1">
-            <span className="inline-flex items-center gap-1 rounded-full border border-accent/30 bg-accent-tint px-2 py-0.5 text-[12px] font-semibold leading-[1.33] text-accent">
-              <CheckCircle2 className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
-              <span>0 Sobreposição Entre Folds</span>
-            </span>
+            {ds.cross_fold_session_overlap === 0 ? (
+              <span className="inline-flex items-center gap-1 rounded-full border border-accent/30 bg-accent-tint px-2 py-0.5 text-[12px] font-semibold leading-[1.33] text-accent">
+                <CheckCircle2 className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+                <span>0 Sobreposição Entre Folds</span>
+              </span>
+            ) : (
+              <span className="inline-flex items-center gap-1 rounded-full border border-warning-border bg-warning-tint px-2 py-0.5 text-[12px] font-semibold leading-[1.33] text-warning">
+                <span>
+                  {formatNumberPtBr(ds.cross_fold_session_overlap, 0)} Sobreposição Entre Folds
+                </span>
+              </span>
+            )}
           </div>
         </div>
 
@@ -101,9 +109,16 @@ export function ExecutiveAuditKpiStrip({
             {formatPercent(maxShift, 1)}
           </p>
           <div className="mt-1">
-            <span className="inline-flex items-center gap-1 rounded-full border border-accent/30 bg-accent-tint px-2 py-0.5 text-[12px] font-semibold leading-[1.33] text-accent">
+            <span
+              className={cn(
+                "inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[12px] font-semibold leading-[1.33] tabular-nums",
+                maxShift < 0.05
+                  ? "border-accent/30 bg-accent-tint text-accent"
+                  : "border-warning-border bg-warning-tint text-warning",
+              )}
+            >
               <CheckCircle2 className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
-              <span>Vencedor C2 · 0,0% Shift</span>
+              <span>Vencedor C2 · {formatPercent(maxShift, 1)} Shift</span>
             </span>
           </div>
         </div>
@@ -151,8 +166,9 @@ export function ExecutiveAuditKpiStrip({
           <span className="font-semibold tabular-nums">
             R² = {formatNullableMetric(win.session_level.session_averaged_r2, 4)}
           </span>{" "}
-          na média por sessão (188 sessões) — a transição para câmera fixa de teto está documentada
-          na aba <span className="font-semibold">Visão Futura (v2)</span>.
+          na média por sessão ({formatNumberPtBr(ds.n_sessions, 0)} sessões) — a transição para
+          câmera fixa de teto está documentada na aba{" "}
+          <span className="font-semibold">Visão Futura (v2)</span>.
         </p>
       </div>
     </section>

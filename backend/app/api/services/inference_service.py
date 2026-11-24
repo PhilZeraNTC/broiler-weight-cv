@@ -155,6 +155,7 @@ def run_predict_service(
         Image.DecompressionBombWarning,
         OSError,
         SyntaxError,
+        ValueError,
     ) as exc:
         if source_type == "upload":
             raise HTTPException(status_code=400, detail=_ERR_DECODE_UPLOAD) from exc

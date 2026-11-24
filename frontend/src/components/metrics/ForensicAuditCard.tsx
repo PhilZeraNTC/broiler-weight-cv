@@ -36,8 +36,9 @@ export function ForensicAuditCard({ datasetAudit, pdiAudit }: ForensicAuditCardP
             Auditoria Forense de Dados · {datasetAudit.dataset_identity.name} (DOI{" "}
             <span className="font-mono">{datasetAudit.dataset_identity.doi}</span>)
           </p>
-          <h2 className="text-[20px] font-semibold leading-[1.2] text-ink">
-            Funil Forense de Curadoria (1.753 → 1.738) &amp; Reconciliação Mendeley
+          <h2 className="text-[20px] font-semibold leading-[1.2] tabular-nums text-ink">
+            Funil Forense de Curadoria ({formatNumberPtBr(funnel.raw_images, 0)} →{" "}
+            {formatNumberPtBr(funnel.clean_images, 0)}) &amp; Reconciliação Mendeley
           </h2>
         </div>
 

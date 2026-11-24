@@ -446,3 +446,80 @@ def test_proibicoes_1_2_3_5_ast_and_route_audit(tmp_path: Path) -> None:
         lower_path = route_path.lower()
         for term in banned_v2_terms:
             assert term not in lower_path, f"PROIBIÇÃO 5 violation: {route_path}"
+
+
+def test_spa_mount_preserves_404_on_non_get_unknown_api_and_405_on_wrong_method(
+    spa_enabled_client: Any,
+) -> None:
+    """IN-03 regression: mounted SPA must never turn POST /api/missing into 405 or shadow 405."""
+    post_missing = spa_enabled_client.post("/api/does-not-exist")
+    assert post_missing.status_code == 404
+    assert "application/json" in post_missing.headers["content-type"]
+
+    wrong_method = spa_enabled_client.get("/api/predict")
+    assert wrong_method.status_code == 405
+    assert "application/json" in wrong_method.headers["content-type"]
+
+    spa_route = spa_enabled_client.get("/metricas")
+    assert spa_route.status_code == 200
+    assert "text/html" in spa_route.headers["content-type"]
+
+
+def test_upload_decode_value_error_maps_to_400_on_predict_and_watershed(
+    api_client: Any,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """IN-02 regression: Pillow/decode ValueError on user uploads must return sanitized 400."""
+    from backend.app.api.services import inference_service, watershed_service
+
+    def _boom(*_args: Any, **_kwargs: Any) -> Any:
+        raise ValueError("Truncated image stream")
+
+    monkeypatch.setattr(inference_service, "run_single_bird_pdi", _boom)
+    monkeypatch.setattr(watershed_service, "run_watershed_pdi", _boom)
+
+    valid_jpg = make_synthetic_jpeg_bytes()
+    resp_pred = api_client.post(
+        "/api/predict",
+        files={"file": ("corrupt_stream.jpg", valid_jpg, "image/jpeg")},
+    )
+    assert resp_pred.status_code == 400
+    assert "Traceback" not in resp_pred.text
+
+    resp_ws = api_client.post(
+        "/api/watershed-demo",
+        files={"file": ("corrupt_stream.jpg", valid_jpg, "image/jpeg")},
+    )
+    assert resp_ws.status_code == 400
+    assert "Traceback" not in resp_ws.text
+
+
+def test_upload_guard_offloads_validation_and_avoids_global_warnings_mutation(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """WR-05 regression: offload upload validation via threadpool without global warnings."""
+    import asyncio
+
+    from fastapi import UploadFile
+
+    from backend.app.api.services import upload_guard
+
+    guard_src = (REPO_ROOT / "backend" / "app" / "api" / "services" / "upload_guard.py").read_text(
+        encoding="utf-8"
+    )
+    assert "catch_warnings" not in guard_src
+
+    called_in_threadpool: list[str] = []
+    orig_threadpool = upload_guard.run_in_threadpool
+
+    async def _spy_threadpool(func: Any, *args: Any, **kwargs: Any) -> Any:
+        called_in_threadpool.append(getattr(func, "__name__", str(func)))
+        return await orig_threadpool(func, *args, **kwargs)
+
+    monkeypatch.setattr(upload_guard, "run_in_threadpool", _spy_threadpool)
+
+    valid_jpg = make_synthetic_jpeg_bytes()
+    upload = UploadFile(filename="ok.jpg", file=io.BytesIO(valid_jpg))
+    raw = asyncio.run(upload_guard.read_and_validate_upload(upload))
+    assert raw == valid_jpg
+    assert "validate_image_bytes" in called_in_threadpool

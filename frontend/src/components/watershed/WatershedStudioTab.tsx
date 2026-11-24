@@ -71,7 +71,22 @@ export function WatershedStudioTab({
   const [opticalOverride, setOpticalOverride] = useState<WatershedOpticalOverride | null>(null);
   const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
 
-  const hasBootedRef = useRef<boolean>(false);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const hasCompletedBootRef = useRef<boolean>(false);
+  const lastAttemptRef = useRef<{
+    source: ActiveWatershedSource;
+    sliders: WatershedSliderValues;
+    optical: WatershedOpticalOverride | null;
+  }>({
+    source: {
+      sourceType: "preset",
+      presetId: DEFAULT_WATERSHED_PRESET_ID,
+      file: null,
+      fileName: null,
+    },
+    sliders: { ...WATERSHED_SLIDER_DEFAULTS },
+    optical: null,
+  });
 
   const executeWatershed = useCallback(
     async (
@@ -80,6 +95,11 @@ export function WatershedStudioTab({
       targetOptical: WatershedOpticalOverride | null,
     ) => {
       setClientError(null);
+      lastAttemptRef.current = {
+        source: targetSource,
+        sliders: targetSliders,
+        optical: targetOptical,
+      };
       const response = await run((signal) =>
         runWatershedDemo(
           {
@@ -99,18 +119,21 @@ export function WatershedStudioTab({
         ),
       );
       if (response) {
+        hasCompletedBootRef.current = true;
+        setSource(targetSource);
+        setSliders(targetSliders);
+        setOpticalOverride(targetOptical);
         onLatency?.(response.timing.total_ms);
       }
     },
     [run, onLatency],
   );
 
-  // Auto-load ws_417 once on first activation of Tab 2 (cached in state thereafter)
+  // Auto-load ws_417 once on first activation of Tab 2 (React 19 StrictMode-safe: latches only on resolved response)
   useEffect(() => {
-    if (!isActive || hasBootedRef.current) {
+    if (!isActive || hasCompletedBootRef.current || data !== null) {
       return;
     }
-    hasBootedRef.current = true;
     const bootSource: ActiveWatershedSource = {
       sourceType: "preset",
       presetId: DEFAULT_WATERSHED_PRESET_ID,
@@ -118,11 +141,8 @@ export function WatershedStudioTab({
       fileName: null,
     };
     const defaultSliders: WatershedSliderValues = { ...WATERSHED_SLIDER_DEFAULTS };
-    setSource(bootSource);
-    setSliders(defaultSliders);
-    setOpticalOverride(null);
     void executeWatershed(bootSource, defaultSliders, null);
-  }, [isActive, executeWatershed]);
+  }, [isActive, data, executeWatershed]);
 
   const handleSelectPreset = useCallback(
     (presetId: string) => {
@@ -133,7 +153,6 @@ export function WatershedStudioTab({
         fileName: null,
       };
       const defaultSliders: WatershedSliderValues = { ...WATERSHED_SLIDER_DEFAULTS };
-      setSource(nextSource);
       setSliders(defaultSliders);
       setOpticalOverride(null);
       void executeWatershed(nextSource, defaultSliders, null);
@@ -150,9 +169,6 @@ export function WatershedStudioTab({
         fileName: file.name,
       };
       const defaultSliders: WatershedSliderValues = { ...WATERSHED_SLIDER_DEFAULTS };
-      setSource(nextSource);
-      setSliders(defaultSliders);
-      setOpticalOverride(null);
       void executeWatershed(nextSource, defaultSliders, null);
     },
     [executeWatershed],
@@ -175,8 +191,9 @@ export function WatershedStudioTab({
   }, [executeWatershed, source]);
 
   const handleRetry = useCallback(() => {
-    void executeWatershed(source, sliders, opticalOverride);
-  }, [executeWatershed, source, sliders, opticalOverride]);
+    const last = lastAttemptRef.current;
+    void executeWatershed(last.source, last.sliders, last.optical);
+  }, [executeWatershed]);
 
   const lightboxStages = useMemo(
     () => buildWatershedLightboxStages(data?.visuals ?? null),
@@ -204,6 +221,7 @@ export function WatershedStudioTab({
     if (activeError?.status === 400 || activeError?.status === 413 || activeError?.status === 415) {
       setClientError(null);
       clearError();
+      fileInputRef.current?.click();
       return;
     }
     handleRetry();
@@ -219,6 +237,7 @@ export function WatershedStudioTab({
         activePresetId={source.presetId}
         activeFileName={source.fileName}
         loading={loading}
+        fileInputRef={fileInputRef}
         onSelectPreset={handleSelectPreset}
         onSelectFile={handleSelectFile}
         onValidationError={(err) => setClientError(err)}
@@ -377,6 +396,15 @@ export function WatershedStudioTab({
         <div className="min-w-0 lg:col-span-4">
           <WatershedSlidersCard
             values={sliders}
+            committedValues={
+              data
+                ? {
+                    h_rel: data.parameters.h_rel,
+                    min_distance_rel: data.parameters.min_distance_rel,
+                    min_area_ratio: data.parameters.min_area_ratio,
+                  }
+                : undefined
+            }
             optical={data?.optical ?? null}
             opticalOverride={opticalOverride}
             loading={loading}

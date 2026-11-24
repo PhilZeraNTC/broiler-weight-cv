@@ -13,10 +13,12 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 
 import cv2
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
+from starlette.routing import Match, Route
+from starlette.types import Scope
 
 from backend.app.api.dependencies import AppState
 from backend.app.api.routers import (
@@ -66,6 +68,17 @@ async def lifespan(application: FastAPI) -> AsyncIterator[None]:
         metrics_payload=metrics_payload,
     )
     yield
+
+
+class _NonApiSpaRoute(Route):
+    """SPA catch-all route that strictly refuses `/api` and `/api/*` paths for all HTTP methods."""
+
+    def matches(self, scope: Scope) -> tuple[Match, Scope]:
+        if scope.get("type") == "http":
+            normalized = str(scope.get("path", "")).lstrip("/")
+            if normalized == "api" or normalized.startswith("api/"):
+                return Match.NONE, {}
+        return super().matches(scope)
 
 
 def create_app(frontend_dist_dir: Path | None = None) -> FastAPI:
@@ -120,15 +133,17 @@ def create_app(frontend_dist_dir: Path | None = None) -> FastAPI:
                 name="frontend-assets",
             )
 
-        @application.get("/{full_path:path}", include_in_schema=False)
-        async def serve_spa(full_path: str) -> FileResponse:
-            normalized = full_path.lstrip("/")
-            if normalized == "api" or normalized.startswith("api/"):
-                raise HTTPException(
-                    status_code=404,
-                    detail="Endpoint da API não encontrado.",
-                )
+        async def serve_spa(_request: Request) -> FileResponse:
             return FileResponse(index_html)
+
+        application.router.routes.append(
+            _NonApiSpaRoute(
+                "/{full_path:path}",
+                endpoint=serve_spa,
+                methods=["GET", "HEAD"],
+                include_in_schema=False,
+            )
+        )
 
     return application
 

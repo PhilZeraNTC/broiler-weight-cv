@@ -178,18 +178,22 @@ export interface UseMetricsResult {
 /**
  * Lazily fetches `GET /api/metrics` the first time `enabled` becomes `true`
  * and caches the response in memory across subsequent tab visits.
+ * React 19 `<StrictMode>`-safe: latches only after a non-aborted response resolves.
  */
 export function useMetrics(enabled: boolean): UseMetricsResult {
   const { data, loading, error, run } = useAbortableRequest<MetricsResponse>();
-  const fetchedRef = useRef<boolean>(false);
+  const resolvedRef = useRef<boolean>(false);
 
   const load = useCallback(() => {
-    fetchedRef.current = true;
-    void run((signal) => fetchMetrics(signal));
+    void run((signal) => fetchMetrics(signal)).then((result) => {
+      if (result !== null) {
+        resolvedRef.current = true;
+      }
+    });
   }, [run]);
 
   useEffect(() => {
-    if (enabled && !fetchedRef.current && data === null) {
+    if (enabled && !resolvedRef.current && data === null) {
       load();
     }
   }, [enabled, data, load]);

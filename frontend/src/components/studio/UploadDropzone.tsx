@@ -1,5 +1,5 @@
 import { ImageUp, Upload } from "lucide-react";
-import { type ChangeEvent, type DragEvent, useRef, useState } from "react";
+import { type ChangeEvent, type DragEvent, type RefObject, useRef, useState } from "react";
 import { ApiError, validateClientUploadFile } from "../../lib/api.ts";
 import { cn } from "../../lib/cn.ts";
 import type { SourceType } from "../../types/api.ts";
@@ -9,6 +9,7 @@ export interface UploadDropzoneProps {
   activePresetLabel: string | null;
   activeFileName: string | null;
   loading: boolean;
+  fileInputRef?: RefObject<HTMLInputElement | null>;
   onSelectFile: (file: File) => void;
   onValidationError: (error: ApiError) => void;
 }
@@ -21,10 +22,12 @@ export function UploadDropzone({
   activePresetLabel,
   activeFileName,
   loading,
+  fileInputRef,
   onSelectFile,
   onValidationError,
 }: UploadDropzoneProps) {
-  const inputRef = useRef<HTMLInputElement | null>(null);
+  const internalInputRef = useRef<HTMLInputElement | null>(null);
+  const inputRef = fileInputRef ?? internalInputRef;
   const [isDragging, setIsDragging] = useState<boolean>(false);
 
   const processCandidateFile = (file: File | null | undefined) => {

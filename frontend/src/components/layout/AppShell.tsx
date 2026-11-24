@@ -1,5 +1,5 @@
 import { Activity, AlertTriangle, CheckCircle2, RefreshCw } from "lucide-react";
-import type { KeyboardEvent, ReactNode } from "react";
+import { type KeyboardEvent, type ReactNode, useRef } from "react";
 import type { HealthStatus } from "../../hooks/useStudioHooks.ts";
 import { cn } from "../../lib/cn.ts";
 import { formatNumberPtBr } from "../../lib/format.ts";
@@ -45,21 +45,24 @@ export function AppShell({
   onRefreshHealth,
   children,
 }: AppShellProps) {
+  const tabRefs = useRef<Array<HTMLButtonElement | null>>([]);
+
   const handleTabKeyDown = (event: KeyboardEvent<HTMLButtonElement>, index: number) => {
+    let targetIndex: number | null = null;
     if (event.key === "ArrowRight") {
-      event.preventDefault();
-      const next = TAB_ITEMS[(index + 1) % TAB_ITEMS.length];
-      onSelectTab(next.id);
+      targetIndex = (index + 1) % TAB_ITEMS.length;
     } else if (event.key === "ArrowLeft") {
-      event.preventDefault();
-      const prev = TAB_ITEMS[(index - 1 + TAB_ITEMS.length) % TAB_ITEMS.length];
-      onSelectTab(prev.id);
+      targetIndex = (index - 1 + TAB_ITEMS.length) % TAB_ITEMS.length;
     } else if (event.key === "Home") {
-      event.preventDefault();
-      onSelectTab(TAB_ITEMS[0].id);
+      targetIndex = 0;
     } else if (event.key === "End") {
+      targetIndex = TAB_ITEMS.length - 1;
+    }
+
+    if (targetIndex !== null) {
       event.preventDefault();
-      onSelectTab(TAB_ITEMS[TAB_ITEMS.length - 1].id);
+      onSelectTab(TAB_ITEMS[targetIndex].id);
+      tabRefs.current[targetIndex]?.focus();
     }
   };
 
@@ -90,6 +93,9 @@ export function AppShell({
                 return (
                   <button
                     key={item.id}
+                    ref={(el) => {
+                      tabRefs.current[idx] = el;
+                    }}
                     id={`tab-${item.id}`}
                     type="button"
                     role="tab"

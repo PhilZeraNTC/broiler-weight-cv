@@ -8,10 +8,10 @@ through Pillow header/magic verification, explicit 15 MiB byte capping, and a
 from __future__ import annotations
 
 import io
-import warnings
 
 from fastapi import HTTPException, UploadFile
 from PIL import Image, UnidentifiedImageError
+from starlette.concurrency import run_in_threadpool
 
 MAX_UPLOAD_BYTES: int = 15 * 1024 * 1024  # 15 MiB (D-02)
 MAX_IMAGE_PIXELS_API: int = 40_000_000  # 40 MP hard ceiling (>5x Redmi 10's 7.51 MP)
@@ -51,7 +51,7 @@ async def read_and_validate_upload(upload: UploadFile) -> bytes:
     if len(raw) > MAX_UPLOAD_BYTES:
         raise HTTPException(status_code=413, detail=_ERR_OVERSIZE_UPLOAD)
 
-    validate_image_bytes(raw)
+    await run_in_threadpool(validate_image_bytes, raw)
     return raw
 
 
@@ -61,17 +61,15 @@ def validate_image_bytes(raw: bytes) -> str:
         raise HTTPException(status_code=400, detail=_ERR_EMPTY_UPLOAD)
 
     try:
-        with warnings.catch_warnings():
-            warnings.simplefilter("error", Image.DecompressionBombWarning)
-            with Image.open(io.BytesIO(raw)) as im:
-                fmt = (im.format or "").upper()
-                if fmt not in ALLOWED_IMAGE_FORMATS:
-                    raise HTTPException(status_code=415, detail=_ERR_UNSUPPORTED_FORMAT)
-                w, h = im.size
-                if w <= 0 or h <= 0 or (w * h) > MAX_IMAGE_PIXELS_API:
-                    raise HTTPException(status_code=400, detail=_ERR_DECOMPRESSION_BOMB)
-                im.verify()
-                return fmt
+        with Image.open(io.BytesIO(raw)) as im:
+            fmt = (im.format or "").upper()
+            if fmt not in ALLOWED_IMAGE_FORMATS:
+                raise HTTPException(status_code=415, detail=_ERR_UNSUPPORTED_FORMAT)
+            w, h = im.size
+            if w <= 0 or h <= 0 or (w * h) > MAX_IMAGE_PIXELS_API:
+                raise HTTPException(status_code=400, detail=_ERR_DECOMPRESSION_BOMB)
+            im.verify()
+            return fmt
     except HTTPException:
         raise
     except (Image.DecompressionBombError, Image.DecompressionBombWarning) as exc:

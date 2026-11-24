@@ -1,6 +1,7 @@
 import { CheckCircle2, Eye, Loader2, X } from "lucide-react";
-import { useCallback, useEffect, useRef, useState } from "react";
-import { ApiError, isAbortError, predictSingleBird } from "../../lib/api.ts";
+import { useCallback, useEffect, useRef } from "react";
+import { useAbortableRequest } from "../../hooks/useStudioHooks.ts";
+import { predictSingleBird } from "../../lib/api.ts";
 import {
   formatGrams,
   formatNullableMetric,
@@ -12,9 +13,6 @@ import { InlineErrorBanner } from "../layout/InlineErrorBanner.tsx";
 
 const DUAL_LENS_WIDE_ID = "sb_dual_lens_wide";
 const DUAL_LENS_ULTRAWIDE_ID = "sb_dual_lens_ultrawide";
-
-const FALLBACK_ERROR_COPY =
-  "Não foi possível conectar à API local FastAPI em 127.0.0.1:8000. Verifique se o servidor Uvicorn está ativo no terminal e clique em 'Tentar Análise Novamente'.";
 
 interface DualLensPairResult {
   wide: PredictResponse;
@@ -28,50 +26,28 @@ export interface DualLensComparisonProps {
 }
 
 export function DualLensComparison({ isOpen, onClose, onInspectPreset }: DualLensComparisonProps) {
-  const [pair, setPair] = useState<DualLensPairResult | null>(null);
-  const [loading, setLoading] = useState<boolean>(false);
-  const [error, setError] = useState<ApiError | null>(null);
-  const controllerRef = useRef<AbortController | null>(null);
+  const { data: pair, loading, error, run } = useAbortableRequest<DualLensPairResult>();
+  const resolvedRef = useRef<boolean>(false);
 
   const loadPair = useCallback(() => {
-    controllerRef.current?.abort();
-    const controller = new AbortController();
-    controllerRef.current = controller;
-
-    setLoading(true);
-    setError(null);
-
-    Promise.all([
-      predictSingleBird({ presetId: DUAL_LENS_WIDE_ID }, controller.signal),
-      predictSingleBird({ presetId: DUAL_LENS_ULTRAWIDE_ID }, controller.signal),
-    ])
-      .then(([wide, ultrawide]) => {
-        if (controller.signal.aborted) {
-          return;
-        }
-        setPair({ wide, ultrawide });
-        setLoading(false);
-      })
-      .catch((err: unknown) => {
-        if (isAbortError(err) || controller.signal.aborted) {
-          return;
-        }
-        setError(err instanceof ApiError ? err : new ApiError(0, FALLBACK_ERROR_COPY));
-        setLoading(false);
-      });
-  }, []);
+    void run(async (signal) => {
+      const [wide, ultrawide] = await Promise.all([
+        predictSingleBird({ presetId: DUAL_LENS_WIDE_ID }, signal),
+        predictSingleBird({ presetId: DUAL_LENS_ULTRAWIDE_ID }, signal),
+      ]);
+      return { wide, ultrawide };
+    }).then((result) => {
+      if (result !== null) {
+        resolvedRef.current = true;
+      }
+    });
+  }, [run]);
 
   useEffect(() => {
-    if (isOpen && pair === null && !loading && error === null) {
+    if (isOpen && !resolvedRef.current && pair === null) {
       loadPair();
     }
-  }, [isOpen, pair, loading, error, loadPair]);
-
-  useEffect(() => {
-    return () => {
-      controllerRef.current?.abort();
-    };
-  }, []);
+  }, [isOpen, pair, loadPair]);
 
   if (!isOpen) {
     return null;
