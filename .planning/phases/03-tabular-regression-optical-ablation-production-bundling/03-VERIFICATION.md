@@ -26,7 +26,7 @@ covered_files:
   - "backend/tests/test_train_and_evaluate_integration.py"
   - "models/evaluation_report.json"
   - "models/presets_catalog.json"
-covered_digest: "v1:sha256:d3fcf7d564b0a76eab77e3c9d42842014335e14364ef45597f4491ef47661c74"
+covered_digest: "v1:sha256:e111a66385816c70baad9ad598d57f4ca9639f5616321b7dd31ac3f0891bd2c3"
 behavior_unverified: 0
 overrides_applied: 0
 overrides: []
@@ -36,9 +36,9 @@ gaps: []
 # Phase 3: Tabular Regression, Optical Ablation & Production Bundling — Verification Report
 
 **Phase Goal:** Train and rigorously audit interpretable tabular weight regressors over the locked 5-fold `session_id` splits, quantitatively prove the impact of EXIF optical calibration without lens-confounding shortcuts, and publish immutable production and out-of-fold pitch artifacts.
-**Verified:** 2026-11-24T00:32:00Z (at post-review hardened HEAD `1fc10c41ec926b3860d17102aa12d74c989a7d81`)
+**Verified:** 2026-11-24T00:32:00Z (at post-review hardened HEAD `1fc10c41ec926b3860d17102aa12d74c989a7d81`; milestone closeout fingerprint refreshed 2026-11-24 at `16eb74e`)
 **Status:** `passed`
-**Re-verification:** No (initial adversarial verification executed after `03-REVIEW.md` hardening commit `1fc10c4`)
+**Re-verification:** Yes — digest refreshed at v1.0 closeout (`16eb74e`) after shared `REQUIREMENTS.md`/`config.py` evolved in Phase 4; full regression suite passed (`272/272` pytest incl. all 69 Phase 3 tests, `ruff check backend/` clean)
 
 ## Executive Summary
 

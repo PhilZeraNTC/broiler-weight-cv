@@ -28,7 +28,7 @@ covered_files:
   - "models/dataset_audit_summary.json"
   - "pyproject.toml"
   - "uv.lock"
-covered_digest: "v1:sha256:aaec244ee4e938f1dd6e063d0890740066faa97d5ccd4404e6f3eace0f89b80a"
+covered_digest: "v1:sha256:fcbb6e7d7ed3dbd2a2c8beca297791685074f094a87ca4ac9c200245e233a17f"
 behavior_unverified: 0
 overrides_applied: 0
 overrides: []
@@ -38,9 +38,9 @@ gaps: []
 # Phase 1: Forensic Data Curation & Anti-Leakage Split — Verification Report
 
 **Phase Goal:** Produce a reproducible Python 3.12 workspace and an immutable, Audit §9-exact forensic dataset manifest (`1,738` clean / `15` quarantined images) partitioned into leak-free 5-fold `session_id` splits.
-**Verified:** 2026-11-22T12:46:00Z
+**Verified:** 2026-11-22T12:46:00Z (milestone closeout fingerprint refreshed 2026-11-24 at `16eb74e`)
 **Status:** `passed`
-**Re-verification:** No — initial adversarial verification
+**Re-verification:** Yes — digest refreshed at v1.0 closeout (`16eb74e`) after shared `REQUIREMENTS.md`/`config.py`/`io_exif.py` evolved in Phases 2–4; full regression suite passed (`272/272` pytest incl. all 39 Phase 1 tests, `ruff check backend/` clean)
 
 ## Executive Summary
 

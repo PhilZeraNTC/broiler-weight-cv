@@ -31,7 +31,7 @@ covered_files:
   - "backend/tests/test_pdi_preprocess_and_lcd.py"
   - "backend/tests/test_pdi_watershed.py"
   - "models/pdi_calibration_audit.json"
-covered_digest: "v1:sha256:c8916faecf5c42d560e88eb48f362246e23887b9f2762155ca7044268f57a5b9"
+covered_digest: "v1:sha256:ac781d3a0b125f5e60e8c063d93938d4cd9914b745a8a5c414b36f6a5ec65483"
 behavior_unverified: 0
 overrides_applied: 0
 overrides: []
@@ -41,9 +41,9 @@ gaps: []
 # Phase 2: Classical PDI Engine, Optical Calibration & Watershed — Verification Report
 
 **Phase Goal:** Deliver the single-source classical Digital Image Processing engine (zero deep learning) that cleanly isolates bird silhouettes without SF-400 LCD leakage, extracts strictly mask-gated morphometric, chromatic, and empirically verified EXIF optical features, renders 4-stage "X-Ray" visuals, and separates touching birds via Marker-based Watershed.
-**Verified:** 2026-11-23T19:21:00Z (refreshed after post-review hardening commit `bc2217c`)
+**Verified:** 2026-11-23T19:21:00Z (refreshed after post-review hardening commit `bc2217c`; milestone closeout fingerprint refreshed 2026-11-24 at `16eb74e`)
 **Status:** `passed`
-**Re-verification:** Yes — fingerprint & full suite refreshed after resolving `02-REVIEW.md` `CR-01`/`CR-02` and `WR-02`–`WR-07` in `bc2217c` (`136/136` pytest passed in `12.63s`, `ruff check backend/` clean, `features_clean.parquet` regenerated in `46.53s` with `0/1,738` Hu saturation, `extent_rotrect max = 0.958942`, and identical `models/pdi_calibration_audit.json` SHA-256 `3c202909...`)
+**Re-verification:** Yes — fingerprint & full suite refreshed after resolving `02-REVIEW.md` `CR-01`/`CR-02` and `WR-02`–`WR-07` in `bc2217c` and again at v1.0 closeout (`16eb74e`) after shared `REQUIREMENTS.md`/`config.py` evolved in Phases 3–4 (`272/272` pytest incl. all Phase 2 tests, `ruff check backend/` clean, `pdi_config_hash = 43a3cfaa3208019e` intact)
 
 ## Executive Summary
 

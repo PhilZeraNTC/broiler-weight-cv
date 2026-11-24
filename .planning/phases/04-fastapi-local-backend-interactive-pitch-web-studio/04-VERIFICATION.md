@@ -1,17 +1,96 @@
 ---
 phase: "04-fastapi-local-backend-interactive-pitch-web-studio"
-verified: "2026-11-24T15:04:25Z"
+verified: "2026-11-24T15:39:21Z"
 status: passed
 score: "5/5 ROADMAP Success Criteria · 5/5 Requirements (WEB-01..WEB-05) · 12/12 Decisions (D-01..D-12) · 52/52 Plan Artifacts · 14/14 Key Links · 11/11 Review Findings Closed"
+covered_files:
+  - ".planning/REQUIREMENTS.md"
+  - ".planning/phases/04-fastapi-local-backend-interactive-pitch-web-studio/04-01-PLAN.md"
+  - ".planning/phases/04-fastapi-local-backend-interactive-pitch-web-studio/04-01-SUMMARY.md"
+  - ".planning/phases/04-fastapi-local-backend-interactive-pitch-web-studio/04-02-PLAN.md"
+  - ".planning/phases/04-fastapi-local-backend-interactive-pitch-web-studio/04-02-SUMMARY.md"
+  - ".planning/phases/04-fastapi-local-backend-interactive-pitch-web-studio/04-03-PLAN.md"
+  - ".planning/phases/04-fastapi-local-backend-interactive-pitch-web-studio/04-03-SUMMARY.md"
+  - ".planning/phases/04-fastapi-local-backend-interactive-pitch-web-studio/04-04-PLAN.md"
+  - ".planning/phases/04-fastapi-local-backend-interactive-pitch-web-studio/04-04-SUMMARY.md"
+  - ".planning/phases/04-fastapi-local-backend-interactive-pitch-web-studio/04-REVIEW.md"
+  - ".planning/phases/04-fastapi-local-backend-interactive-pitch-web-studio/04-UI-SPEC.md"
+  - "backend/app/api/__init__.py"
+  - "backend/app/api/dependencies.py"
+  - "backend/app/api/main.py"
+  - "backend/app/api/routers/__init__.py"
+  - "backend/app/api/routers/health.py"
+  - "backend/app/api/routers/metrics.py"
+  - "backend/app/api/routers/predict.py"
+  - "backend/app/api/routers/presets.py"
+  - "backend/app/api/routers/watershed.py"
+  - "backend/app/api/schemas.py"
+  - "backend/app/api/services/__init__.py"
+  - "backend/app/api/services/inference_service.py"
+  - "backend/app/api/services/metrics_service.py"
+  - "backend/app/api/services/preset_service.py"
+  - "backend/app/api/services/upload_guard.py"
+  - "backend/app/api/services/watershed_service.py"
+  - "backend/app/config.py"
+  - "backend/tests/test_api_contract.py"
+  - "backend/tests/test_api_latency_and_parity.py"
+  - "backend/tests/test_api_security.py"
+  - "frontend/biome.json"
+  - "frontend/index.html"
+  - "frontend/package.json"
+  - "frontend/src/App.tsx"
+  - "frontend/src/components/layout/AppShell.tsx"
+  - "frontend/src/components/layout/InlineErrorBanner.tsx"
+  - "frontend/src/components/layout/StageLightbox.tsx"
+  - "frontend/src/components/metrics/ActualVsPredictedScatter.tsx"
+  - "frontend/src/components/metrics/FeatureImportanceChart.tsx"
+  - "frontend/src/components/metrics/ForensicAuditCard.tsx"
+  - "frontend/src/components/metrics/MetricsAuditTab.tsx"
+  - "frontend/src/components/metrics/ModelComparisonTable.tsx"
+  - "frontend/src/components/metrics/OpticalAblationChart.tsx"
+  - "frontend/src/components/metrics/StratifiedErrorsPanel.tsx"
+  - "frontend/src/components/studio/DualLensComparison.tsx"
+  - "frontend/src/components/studio/FlockBatchCard.tsx"
+  - "frontend/src/components/studio/OpticalCalibrationCard.tsx"
+  - "frontend/src/components/studio/PredictionSummaryCard.tsx"
+  - "frontend/src/components/studio/PresetsStrip.tsx"
+  - "frontend/src/components/studio/TelemetryPanel.tsx"
+  - "frontend/src/components/studio/UploadDropzone.tsx"
+  - "frontend/src/components/studio/XRayQuadViewer.tsx"
+  - "frontend/src/components/studio/XRayStudioTab.tsx"
+  - "frontend/src/components/vision/FutureVisionTab.tsx"
+  - "frontend/src/components/watershed/WatershedInstanceTable.tsx"
+  - "frontend/src/components/watershed/WatershedPresetStrip.tsx"
+  - "frontend/src/components/watershed/WatershedSlidersCard.tsx"
+  - "frontend/src/components/watershed/WatershedStageGrid.tsx"
+  - "frontend/src/components/watershed/WatershedStudioTab.tsx"
+  - "frontend/src/hooks/useStudioHooks.ts"
+  - "frontend/src/index.css"
+  - "frontend/src/lib/api.ts"
+  - "frontend/src/lib/cn.ts"
+  - "frontend/src/lib/flock.ts"
+  - "frontend/src/lib/format.ts"
+  - "frontend/src/lib/scatter.test.ts"
+  - "frontend/src/lib/scatter.ts"
+  - "frontend/src/lib/studioCore.test.ts"
+  - "frontend/src/main.tsx"
+  - "frontend/src/types/api.ts"
+  - "frontend/tsconfig.app.json"
+  - "frontend/tsconfig.json"
+  - "frontend/tsconfig.node.json"
+  - "frontend/vite.config.ts"
+covered_digest: "v1:sha256:9d62ed6d0f1c1124718b9b436d344bac28197d98ca93d2541d788939eca69a88"
+behavior_unverified: 0
+overrides_applied: 0
 overrides: []
 gaps: []
 ---
 
 # Phase 4 Verification Report: FastAPI Local Backend & Interactive Pitch Web Studio
 
-**Verified:** `2026-11-24T15:04:25Z`
+**Verified:** `2026-11-24T15:04:25Z` (fingerprint & full regression re-verified `2026-11-24T15:39:21Z` after micro-polish `eaa9f83`/`16eb74e`)
 **Verdict:** `PASSED` (0 blockers, 0 gaps, 0 stub/orphaned artifacts, 0 regressions across Phases 1–4)
-**Baseline Commit Audited:** `53a5670` (including code-review closure commit `9519bc1`)
+**Baseline Commit Audited:** `16eb74e` (incorporating `9519bc1` code-review closure + `eaa9f83` micro-polish: promoted Tab 2 missing-EXIF banner, direct SPA pathname routing, and `04-04-SUMMARY.md` frontmatter parity; `272/272` pytest + `ruff` + `tsc` + `biome` + `26/26` Vitest + single-origin E2E verified green)
 
 ---
 
