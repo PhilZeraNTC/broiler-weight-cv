@@ -22,6 +22,7 @@ PDI_CALIBRATION_AUDIT_PATH: Path = MODELS_DIR / "pdi_calibration_audit.json"
 MODEL_BUNDLE_PATH: Path = MODELS_DIR / "weight_regressor.joblib"
 EVALUATION_REPORT_PATH: Path = MODELS_DIR / "evaluation_report.json"
 PRESETS_CATALOG_PATH: Path = MODELS_DIR / "presets_catalog.json"
+FRONTEND_DIST_DIR: Path = REPO_ROOT / "frontend" / "dist"
 
 __all__ = [
     "REPO_ROOT",
@@ -37,4 +38,5 @@ __all__ = [
     "MODEL_BUNDLE_PATH",
     "EVALUATION_REPORT_PATH",
     "PRESETS_CATALOG_PATH",
+    "FRONTEND_DIST_DIR",
 ]
