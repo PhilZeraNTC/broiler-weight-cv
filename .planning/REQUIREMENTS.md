@@ -22,9 +22,9 @@ Requirements for the MVP release (code freeze 2026-11-28, pitch 2026-11-30). Eac
 
 ### Tabular Regression & Stratified Validation
 
-- [ ] **MOD-01** *(PRD REQ-08)*: Training pipeline fits and compares interpretable tabular regressors (log-target Ridge/Huber, Random Forest, and LightGBM/Gradient Boosting — zero deep learning) across the locked 5-fold `session_id` splits using strictly PDI-extracted features and validated optical descriptors, evaluating capped inverse session/stratum weighting and fold-internal Duan smearing.
-- [ ] **MOD-02** *(PRD REQ-09)*: Evaluation pipeline scores all models out-of-fold across the 5 `session_id` folds and writes `models/evaluation_report.json` with MAE (g), RMSE (g), MAPE (%), $R^2$, and Mean Bias Error globally and stratified by weight band (`<500 g`, `500–1000 g`, `>1000 g`), lens (`4.25 mm` vs. `1.65 mm`), and scenario (dorsal bucket vs. scale/litter), including a quantitative WITH vs. WITHOUT EXIF optical ablation and within-session dual-lens consistency/counterfactual check.
-- [ ] **MOD-03** *(PRD REQ-10)*: Artifact publisher exports the winning production pipeline bundled with all 5 out-of-fold `fold_pipelines` (enabling honest out-of-fold live preset evaluation), locked `PDIConfig` SHA-256 hash, exact `feature_names`, version metadata, and per-band expected error intervals into `models/weight_regressor.joblib`, plus curated out-of-fold `models/presets_catalog.json`.
+- [x] **MOD-01** *(PRD REQ-08)*: Training pipeline fits and compares interpretable tabular regressors (log-target Ridge/Huber, Random Forest, and LightGBM/Gradient Boosting — zero deep learning) across the locked 5-fold `session_id` splits using strictly PDI-extracted features and validated optical descriptors, evaluating capped inverse session/stratum weighting and fold-internal Duan smearing.
+- [x] **MOD-02** *(PRD REQ-09)*: Evaluation pipeline scores all models out-of-fold across the 5 `session_id` folds and writes `models/evaluation_report.json` with MAE (g), RMSE (g), MAPE (%), $R^2$, and Mean Bias Error globally and stratified by weight band (`<500 g`, `500–1000 g`, `>1000 g`), lens (`4.25 mm` vs. `1.65 mm`), and scenario (dorsal bucket vs. scale/litter), including a quantitative WITH vs. WITHOUT EXIF optical ablation and within-session dual-lens consistency/counterfactual check.
+- [x] **MOD-03** *(PRD REQ-10)*: Artifact publisher exports the winning production pipeline bundled with all 5 out-of-fold `fold_pipelines` (enabling honest out-of-fold live preset evaluation), locked `PDIConfig` SHA-256 hash, exact `feature_names`, version metadata, and per-band expected error intervals into `models/weight_regressor.joblib`, plus curated out-of-fold `models/presets_catalog.json`.
 
 ### Interactive Pitch Web Studio (Local API & Frontend)
 
@@ -79,9 +79,9 @@ Which phases cover which requirements. Populated during roadmap creation.
 | PDI-03 | Phase 2 | Complete |
 | PDI-04 | Phase 2 | Complete |
 | PDI-05 | Phase 2 | Complete |
-| MOD-01 | Phase 3 | Pending |
-| MOD-02 | Phase 3 | Pending |
-| MOD-03 | Phase 3 | Pending |
+| MOD-01 | Phase 3 | Complete |
+| MOD-02 | Phase 3 | Complete |
+| MOD-03 | Phase 3 | Complete |
 | WEB-01 | Phase 4 | Pending |
 | WEB-02 | Phase 4 | Pending |
 | WEB-03 | Phase 4 | Pending |
@@ -96,4 +96,4 @@ Which phases cover which requirements. Populated during roadmap creation.
 
 ---
 *Requirements defined: 2026-11-20*
-*Last updated: 2026-11-23 after Phase 2 completion*
+*Last updated: 2026-11-23 after Phase 3 completion*

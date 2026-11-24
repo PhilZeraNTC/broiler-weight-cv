@@ -1,19 +1,19 @@
 ---
 gsd_state_version: "1.0"
-current_phase: 03
-current_phase_name: Tabular Regression, Optical Ablation & Production Bundling
-status: executing
-stopped_at: Phase 3 context gathered
-last_updated: "2026-11-23T23:30:11.779Z"
+current_phase: 4
+current_phase_name: FastAPI Local Backend & Interactive Pitch Web Studio
+status: planning
+stopped_at: Phase 3 complete, ready to plan Phase 4
+last_updated: "2026-11-24T00:35:24.754Z"
 last_activity: 2026-11-23
-last_activity_desc: Phase 2 complete, transitioned to Phase 3
-state_head: 2efb6e304757e27393c8bdb7d310569dd15e85ed
+last_activity_desc: Phase 3 complete, transitioned to Phase 4
+state_head: 1fc10c41ec926b3860d17102aa12d74c989a7d81
 progress:
   total_phases: 4
-  completed_phases: 2
+  completed_phases: 3
   total_plans: 10
-  completed_plans: 7
-  percent: 50
+  completed_plans: 10
+  percent: 75
 ---
 
 # Project State
@@ -23,22 +23,22 @@ progress:
 See: .planning/PROJECT.md (updated 2026-11-23)
 
 **Core value:** Estimar o peso vivo individual de frangos de corte de forma precisa, auditada e 100% interpretável usando apenas PDI clássico calibrado por óptica EXIF — sem deep learning e com zero vazamento do visor LCD — em uma demo web local (`< 500 ms`).
-**Current focus:** Phase 3 — Tabular Regression, Optical Ablation & Production Bundling
+**Current focus:** Phase 4 — FastAPI Local Backend & Interactive Pitch Web Studio
 
 ## Current Position
 
-Phase: 03 (Tabular Regression, Optical Ablation & Production Bundling) — READY TO EXECUTE
+Phase: 4 — FastAPI Local Backend & Interactive Pitch Web Studio
 Plan: Not started
-Status: Ready to execute
-Last activity: 2026-11-23 — Phase 2 complete, transitioned to Phase 3
+Status: Ready to plan
+Last activity: 2026-11-23 — Phase 3 complete, transitioned to Phase 4
 
-Progress: [█████░░░░░] 50%
+Progress: [████████░░] 75%
 
 ## Performance Metrics
 
 **Velocity:**
 
-- Total plans completed: 7
+- Total plans completed: 10
 - Average duration: -
 - Total execution time: 0.0 hours
 
@@ -48,6 +48,7 @@ Progress: [█████░░░░░] 50%
 |-------|-------|-------|----------|
 | 01 | 3 | - | - |
 | 2 | 4 | - | - |
+| 3 | 3 | - | - |
 
 **Recent Trend:**
 
@@ -71,6 +72,9 @@ Recent decisions affecting current work:
 - [Phase 2]: Frozen 49-key `FEATURE_COLUMNS` inside `bird_mask == 255` (`pdi_config_hash = 43a3cfaa3208019e`, `working_long_edge = 768`, zero raw resolution/bbox leakage) materialized to `data/processed/features_clean.parquet` (`1,738 × 60` in `46.53 s` at `--workers 4`), with `0.23%` fallback (`0/377` bucket), `0.0`-diff outside-mask invariance, and `p95 = 88.3 ms` single-bird X-Ray latency.
 - [Phase 2]: Empirical dual-lens audit across `127` mixed-lens sessions (`175` same-scene pairs, `models/pdi_calibration_audit.json`) proved `area_optical_norm = area_px / (zoom_multiple ** 2)` wins unanimously (`W/UW = 0.9638` on bucket pairs vs. `0.145` double-counting under `(f_mm * zoom)**2`); retained `area_frac_optical_norm` as secondary ablation feature for Phase 3.
 - [Phase 2]: Post-review hardening (`bc2217c`) resolved `CR-01`/`CR-02` & `WR-02..07` (Hu moments `binaryImage=True` dropping `55 → 0` saturated, `[0.5, 200.0] mm` EXIF `FocalLength` bounds, 8-connectivity + SF-400 LCD suppression in Watershed with `9/13` exact / `12/13` ±1 / `MAE 0.38`) and verified `136/136` tests passing.
+- [Phase 3]: Deterministic winner `LightGBMLog` on `C2_physics_normalized_strict` (`39` strictly mask-gated features, `area_px / zoom²`, `session_band_capped_5x` weights, `duan_smearing=False`) achieved `MAE = 158.11 g`, `RMSE = 264.02 g`, `BalMAPE = 35.11%`, `R² = 0.5582` (`session_averaged_r2 = 0.6905`), unanimously beating `C1_uncalibrated_pdi` with `0.0%` dual-mode counterfactual shift while disqualifying `C3`/`C4` lens-ID shortcuts.
+- [Phase 3]: Published immutable dual-bundle `models/weight_regressor.joblib` (git-ignored, `3.18 MiB`, `production_pipeline` + 5 `fold_pipelines` `{0..4}`, `75.2 ms` cold load, `2.4 ms` single-row inference), pure-stdlib `age_stage.py`, byte-deterministic `models/evaluation_report.json` (`b8d21b2d...`), and opaque-`image_id` `models/presets_catalog.json` (`3a0c7e50...`, 6 OOF single-bird presets spanning folds `0..4` incl. same-session `541__s0` Wide `383.22 g` vs. UW `384.16 g` + 4 Watershed presets).
+- [Phase 3]: Post-review hardening (`1fc10c4`) resolved `CR-01` (preserving tuple `clahe_tile_grid = (8, 8)` + `PDIConfig(**pdi_config)` reconstruction & hash check inside `validate_model_bundle`), `WR-01..06`, and `IN-01..04`; verified `205/205` pytest passing and `03-VERIFICATION.md` `16/16` (`passed`).
 
 ### Pending Todos
 
@@ -78,7 +82,7 @@ None yet.
 
 ### Blockers/Concerns
 
-- [Phase 3–4]: Code freeze `2026-11-28` for `2026-11-30` pitch (8 calendar days); preserve `< 400 ms` p95 latency margin on native `4080×1840` JPEGs and transparent reporting of the `801–1,216 g` dataset gap.
+- [Phase 4]: Code freeze `2026-11-28` for `2026-11-30` pitch; preserve `< 400 ms` p95 latency margin on native `4080×1840` JPEGs (`p95 = 88.3 ms` PDI + `2.4 ms` ML leaves `> 300 ms` headroom), resolve opaque `image_id` presets strictly via `manifest_clean.parquet`/`manifest_quarantine.parquet` inside `RAW_DATASET_DIR.resolve()`, and transparently report the `801–1,216 g` dataset gap & Mendeley `"45 days"` reconciliation in `WEB-05`.
 
 ## Deferred Items
 
@@ -90,6 +94,6 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-11-23T22:39:23.315Z
-Stopped at: Phase 3 context gathered
-Resume file: .planning/phases/03-tabular-regression-optical-ablation-production-bundling/03-CONTEXT.md
+Last session: 2026-11-23
+Stopped at: Phase 3 complete, ready to plan Phase 4
+Resume file: None
