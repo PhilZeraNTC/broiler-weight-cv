@@ -437,3 +437,37 @@ def test_all_four_model_families_fresh_subprocess_joblib_roundtrip_and_latency(
         )
     lgb_ms = float(parsed["LightGBMLog"]["ms"])
     assert lgb_ms < 5.0, f"LightGBMLog single-row latency exceeded 5.0 ms budget: {lgb_ms:.3f} ms"
+
+
+def test_review_hardening_wrappers_complex_and_numpy_age_scalars() -> None:
+    """Regression tests for WR-01 (DataFrame column-order check), WR-03 (complex), WR-04 (NumPy)."""
+    X_df, y_g, _, _, c2_cols = _make_synthetic_c2_regression_data(n_rows=60, seed=7)
+
+    # WR-01: AllometricLogTransformer rejects swapped DataFrame cols & clears stale ndarray names.
+    tf = AllometricLogTransformer().fit(X_df)
+    swapped = X_df.loc[:, list(reversed(c2_cols))]
+    with pytest.raises(ValueError, match="column order mismatch"):
+        tf.transform(swapped)
+
+    ridge_pipe = build_regressor_pipeline("RidgeLog").fit(X_df, y_g)
+    with pytest.raises(ValueError, match="column order mismatch"):
+        ridge_pipe.predict(swapped)
+
+    tf.fit(X_df.to_numpy(dtype=np.float64))
+    assert not hasattr(tf, "feature_names_in_")
+
+    # WR-03: predict_from_feature_dict rejects complex numbers cleanly (no ComplexWarning drop).
+    row = X_df.iloc[0].to_dict()
+    for bad_complex in (1.0 + 2.0j, np.complex128(3.0 + 4.0j)):
+        corrupted = dict(row)
+        corrupted[c2_cols[0]] = bad_complex  # type: ignore[assignment]
+        with pytest.raises(ValueError, match="finite real numeric"):
+            predict_from_feature_dict(ridge_pipe, c2_cols, corrupted)
+
+    # WR-04: map_weight_to_age_stage accepts NumPy real integer/float scalars and rejects complex.
+    for np_scalar in (np.int32(180), np.int64(550), np.float32(1500.5), np.float64(2093.0)):
+        res = map_weight_to_age_stage(np_scalar)  # type: ignore[arg-type]
+        assert res.weight_g == pytest.approx(float(np_scalar), abs=1e-4)
+        assert res.out_of_training_range is False
+    with pytest.raises(ValueError, match="finite positive real"):
+        map_weight_to_age_stage(500.0 + 1.0j)  # type: ignore[arg-type]

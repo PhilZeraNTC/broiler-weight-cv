@@ -1079,3 +1079,37 @@ def test_synthetic_lens_confounded_dataset_flags_c3_and_c4_and_selects_c2(
     winner = select_winning_candidate([ridge_c2, ridge_c3, ridge_c4, lgb_c2, lgb_c3, lgb_c4])
     assert winner.ablation_condition == "C2_physics_normalized_strict"
     assert winner.eligible_for_production is True
+
+
+def test_review_hardening_nonpositive_metrics_c2_p90_gate_and_audit_nan(tmp_path: Path) -> None:
+    """Regression tests for WR-02 (y_true<=0), WR-06 (C2 mean/p90 invariance), IN-04 (audit NaN)."""
+    # WR-02: compute_regression_metrics rejects non-positive ground-truth weights (no 1e9% MAPE).
+    for bad_y in ([0.0, 200.0], [-50.0, 200.0]):
+        with pytest.raises(ValueError, match="strictly positive"):
+            compute_regression_metrics(bad_y, [150.0, 200.0])
+
+    # WR-06: C2 gate checks mean_shift_pct and p90_shift_pct in addition to median_shift_pct.
+    bad_cf_p90 = {
+        "n_evaluated": 10,
+        "focal_only": {"median_shift_pct": 0.0, "mean_shift_pct": 0.0, "p90_shift_pct": 0.0},
+        "physical_lens_swap": {
+            "median_shift_pct": 0.0,
+            "mean_shift_pct": 0.5,
+            "p90_shift_pct": 2.0,
+        },
+    }
+    with pytest.raises(RuntimeError, match="strict 0.0% lens invariance"):
+        evaluate_anti_confounding_gate("C2_physics_normalized_strict", bad_cf_p90, {}, None)
+
+    # IN-04: load_modeling_dataset rejects NaN in non-alignment audit column (scene_type).
+    m_path, _, _, f_df = _write_synthetic_modeling_parquets(tmp_path)
+    f_df_nan = f_df.copy()
+    f_df_nan.loc[0, "scene_type"] = None
+    f_path = tmp_path / "f_nan.parquet"
+    f_df_nan.to_parquet(f_path, index=False)
+    with pytest.raises(ValueError, match="audit column 'scene_type'"):
+        load_modeling_dataset(
+            manifest_path=m_path,
+            features_path=f_path,
+            min_heavy_sessions_per_fold=2,
+        )

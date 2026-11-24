@@ -33,7 +33,7 @@ import joblib
 import numpy as np
 import pandas as pd
 
-from backend.app.ingestion.decoding import MULTI_BIRD_FOLDERS, assign_weight_band
+from backend.app.ingestion.decoding import MULTI_BIRD_FOLDERS
 from backend.app.modeling.age_stage import (
     VALID_AGE_DAYS_RANGE,
     VALID_TRAINING_WEIGHT_MAX_G,
@@ -321,6 +321,10 @@ def validate_model_bundle(
     pdi_cfg = bundle["pdi_config"]
     if not isinstance(pdi_cfg, dict) or not pdi_cfg:
         raise ValueError("pdi_config must be a non-empty dictionary.")
+    try:
+        reconstructed_pdi_cfg = PDIConfig(**pdi_cfg)
+    except (TypeError, ValueError) as exc:
+        raise ValueError(f"pdi_config is not a valid PDIConfig payload: {exc}") from exc
 
     cfg_hash = bundle["pdi_config_hash"]
     if (
@@ -335,6 +339,11 @@ def validate_model_bundle(
         raise ValueError(
             f"pdi_config_hash mismatch: bundle has {cfg_hash!r}, "
             f"expected {expected_pdi_config_hash!r}."
+        )
+    if reconstructed_pdi_cfg.config_hash() != cfg_hash:
+        raise ValueError(
+            f"pdi_config_hash does not match pdi_config payload: "
+            f"bundle hash={cfg_hash!r}, reconstructed={reconstructed_pdi_cfg.config_hash()!r}."
         )
 
     winning_model = bundle["winning_model_name"]
@@ -449,8 +458,13 @@ def build_model_bundle(
             dataset.df["weight_band"],
         )
         production_pipeline.fit(X_all, y_all, reg__sample_weight=sw_all)
-    else:
+    elif winner.weighting_mode == "unweighted":
         production_pipeline.fit(X_all, y_all)
+    else:
+        raise ValueError(
+            f"Unsupported weighting_mode {winner.weighting_mode!r}; "
+            f"expected {DEFAULT_WEIGHTING_MODE!r} or 'unweighted'."
+        )
 
     fold_pipelines = {
         int(fold_idx): winner.fold_pipelines[fold_idx]
@@ -460,7 +474,7 @@ def build_model_bundle(
     bundle: dict[str, Any] = {
         "schema_version": MODEL_BUNDLE_SCHEMA_VERSION,
         "model_version": MODEL_VERSION,
-        "pdi_config": _json_normalize(asdict(dataset.pdi_config)),
+        "pdi_config": asdict(dataset.pdi_config),
         "pdi_config_hash": str(dataset.pdi_config_hash),
         "winning_model_name": str(winner.model_name),
         "winning_ablation_condition": str(winner.ablation_condition),
@@ -810,9 +824,10 @@ def _select_single_bird_presets(
     enriched.loc[:, "oof_predicted_g"] = oof_pred
     enriched.loc[:, "oof_abs_err_g"] = abs_err
     enriched.loc[:, "oof_pct_err"] = pct_err
-    # Normalize weight_band consistently via Phase 1 assign_weight_band.
+    # Normalize weight_band consistently with floating-point boundaries (<500, 500..1000, >1000).
     enriched.loc[:, "weight_band"] = [
-        assign_weight_band(int(round(float(w)))) for w in y_true
+        "<500g" if float(w) < 500.0 else ("500-1000g" if float(w) <= 1000.0 else ">1000g")
+        for w in y_true
     ]
 
     non_fallback = enriched.loc[~enriched["segmentation_fallback"].astype(bool)].reset_index(

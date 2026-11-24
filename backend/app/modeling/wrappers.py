@@ -73,12 +73,22 @@ class AllometricLogTransformer(BaseEstimator, TransformerMixin):
             arr = np.asarray(X)
             if arr.ndim != 2:
                 raise ValueError(f"Expected 2D input array, got shape {arr.shape!r}")
+            if hasattr(self, "feature_names_in_"):
+                delattr(self, "feature_names_in_")
             self.n_features_in_ = int(arr.shape[1])
             self.log_indices_ = ()
         return self
 
     def transform(self, X: pd.DataFrame | np.ndarray) -> np.ndarray:
         check_is_fitted(self, "log_indices_")
+        if isinstance(X, pd.DataFrame) and hasattr(self, "feature_names_in_"):
+            incoming = [str(c) for c in X.columns]
+            expected = [str(c) for c in self.feature_names_in_]
+            if incoming != expected:
+                raise ValueError(
+                    "AllometricLogTransformer feature names or column order mismatch: "
+                    f"expected {expected!r}, got {incoming!r}."
+                )
         arr = (
             X.to_numpy(dtype=np.float64, copy=True)
             if isinstance(X, pd.DataFrame)

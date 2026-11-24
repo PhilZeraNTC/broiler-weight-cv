@@ -10,6 +10,7 @@ the 7.1 GiB RAM local host, and ``SimpleImputer(strategy="median")`` precedes
 from __future__ import annotations
 
 import math
+import numbers
 from collections.abc import Mapping, Sequence
 from typing import Any
 
@@ -218,9 +219,9 @@ def predict_from_feature_dict(
     ordered_values = np.empty((1, len(ordered_names)), dtype=np.float64)
     for idx, name in enumerate(ordered_names):
         raw_val = features[name]
-        if isinstance(raw_val, bool) or not isinstance(raw_val, (int, float, np.number)):
+        if isinstance(raw_val, bool) or not isinstance(raw_val, numbers.Real):
             raise ValueError(
-                f"Feature {name!r} must be a finite numeric value, got {raw_val!r}"
+                f"Feature {name!r} must be a finite real numeric value, got {raw_val!r}"
             )
         numeric = float(raw_val)
         if not math.isfinite(numeric):

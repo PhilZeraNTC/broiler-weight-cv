@@ -275,6 +275,10 @@ def load_modeling_dataset(
         if manifest_df[col].isna().any() or features_df[col].isna().any():
             raise ValueError(f"Missing/NaN values detected in alignment column {col!r}.")
 
+    for col in _FEATURES_JOIN_AUDIT_COLUMNS:
+        if features_df[col].isna().any():
+            raise ValueError(f"Missing/NaN values detected in audit column {col!r}.")
+
     if manifest_df["image_id"].astype(str).nunique() != len(manifest_df):
         raise ValueError("Duplicate image_id values detected in manifest Parquet.")
     if features_df["image_id"].astype(str).nunique() != len(features_df):

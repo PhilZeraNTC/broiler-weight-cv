@@ -12,6 +12,7 @@ and Phase 4 FastAPI services share one zero-overhead domain contract.
 from __future__ import annotations
 
 import math
+import numbers
 from dataclasses import dataclass
 
 VALID_TRAINING_WEIGHT_MIN_G: int = 116
@@ -38,8 +39,8 @@ class AgeStageResult:
 
 def map_weight_to_age_stage(weight_g: float) -> AgeStageResult:
     """Map a strictly positive finite live weight (g) into a Cobb Avian 48 stage (D-08)."""
-    if isinstance(weight_g, bool) or not isinstance(weight_g, (int, float)):
-        raise ValueError(f"weight_g must be a finite positive number, got {weight_g!r}")
+    if isinstance(weight_g, bool) or not isinstance(weight_g, numbers.Real):
+        raise ValueError(f"weight_g must be a finite positive real number, got {weight_g!r}")
     w = float(weight_g)
     if not math.isfinite(w) or w <= 0.0:
         raise ValueError(f"weight_g must be finite and > 0, got {weight_g!r}")

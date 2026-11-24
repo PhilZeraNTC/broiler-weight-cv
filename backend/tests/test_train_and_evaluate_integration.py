@@ -727,6 +727,17 @@ def test_load_model_bundle_rejects_corrupt_schema_hash_folds_and_features(tmp_pa
     with pytest.raises(ValueError, match="band_error_intervals"):
         validate_model_bundle(bad_bands)
 
+    # CR-01: pdi_config must reconstruct PDIConfig(**pdi_config) with matching hash (no list grid).
+    bad_grid = _make_valid_bundle()
+    bad_grid["pdi_config"] = {**bad_grid["pdi_config"], "clahe_tile_grid": [8, 8]}
+    with pytest.raises(ValueError, match="valid PDIConfig"):
+        validate_model_bundle(bad_grid)
+
+    drifted_cfg = _make_valid_bundle()
+    drifted_cfg["pdi_config"] = {"working_long_edge": 960}
+    with pytest.raises(ValueError, match="does not match pdi_config payload"):
+        validate_model_bundle(drifted_cfg)
+
 
 def test_build_presets_catalog_rejects_empty_single_bird_and_watershed_pools(
     tmp_path: Path,
@@ -1118,3 +1129,15 @@ def test_git_hygiene_ignores_joblib_tracks_phase3_json_and_excludes_raw_processe
     assert tracked_forbidden.stdout.strip() == "", (
         "PROIBIÇÃO 4 violation: data/raw, data/processed, or models/*.joblib tracked by Git."
     )
+
+
+def test_real_model_bundle_pdi_config_reconstructs_cleanly() -> None:
+    """CR-01 regression gate: real joblib bundle reconstructs PDIConfig(**bundle['pdi_config'])."""
+    bundle = load_model_bundle(
+        MODEL_BUNDLE_PATH,
+        expected_pdi_config_hash=PDIConfig().config_hash(),
+    )
+    reconstructed = PDIConfig(**bundle["pdi_config"])
+    assert reconstructed == PDIConfig()
+    assert isinstance(bundle["pdi_config"]["clahe_tile_grid"], tuple)
+    assert reconstructed.config_hash() == bundle["pdi_config_hash"]

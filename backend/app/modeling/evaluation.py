@@ -217,11 +217,14 @@ def compute_regression_metrics(
             "p90_abs_err_g": None,
         }
 
+    if np.any(y_t <= 0.0):
+        raise ValueError("y_true must contain strictly positive (> 0) weights for MAPE.")
+
     err = y_p - y_t
     abs_err = np.abs(err)
     mae_g = float(mean_absolute_error(y_t, y_p))
     rmse_g = float(root_mean_squared_error(y_t, y_p))
-    mape_pct = float(np.mean(abs_err / np.maximum(y_t, 1e-6)) * 100.0)
+    mape_pct = float(np.mean(abs_err / y_t) * 100.0)
     mbe_g = float(np.mean(err))
     p50, p68, p90 = np.percentile(abs_err, (50.0, 68.0, 90.0))
 
@@ -545,6 +548,16 @@ def compute_counterfactual_lens_flip(
             X_cf_phys = X_val.copy()
             f_old = df_val["focal_length_mm"].to_numpy(dtype=np.float64)
             z_old = df_val["zoom_multiple"].to_numpy(dtype=np.float64)
+            if (
+                np.any(~np.isfinite(f_old))
+                or np.any(f_old <= 0.0)
+                or np.any(~np.isfinite(z_old))
+                or np.any(z_old <= 0.0)
+            ):
+                raise ValueError(
+                    "focal_length_mm and zoom_multiple must be strictly positive finite floats "
+                    "for physical_lens_swap counterfactual evaluation."
+                )
             f_new = np.where(is_wide, _UW_FOCAL_MM, _WIDE_FOCAL_MM)
             z_new = np.where(is_wide, _UW_ZOOM, _WIDE_ZOOM)
             sensor_ratio = np.where(
@@ -633,13 +646,17 @@ def evaluate_anti_confounding_gate(
 
     if condition == "C2_physics_normalized_strict":
         if n_eval > 0:
-            focal_med = focal_info.get("median_shift_pct")
-            phys_med = phys_info.get("median_shift_pct")
-            if focal_med != 0.0 or phys_med != 0.0:
-                raise RuntimeError(
-                    "C2_physics_normalized_strict violated strict 0.0% lens invariance: "
-                    f"focal_med={focal_med!r}, phys_med={phys_med!r}"
-                )
+            for mode_name, mode_info in (
+                ("focal_only", focal_info),
+                ("physical_lens_swap", phys_info),
+            ):
+                for stat_key in ("median_shift_pct", "mean_shift_pct", "p90_shift_pct"):
+                    val = mode_info.get(stat_key)
+                    if val != 0.0:
+                        raise RuntimeError(
+                            "C2_physics_normalized_strict violated strict 0.0% lens invariance: "
+                            f"{mode_name}.{stat_key}={val!r}"
+                        )
         return False, []
 
     if condition == "C1_uncalibrated_pdi":
@@ -1097,27 +1114,29 @@ def run_full_evaluation(
     ]
     winner = next(cand for cand in candidates if cand.is_winner)
 
-    # Step 4: 2x2 weighting x Duan's smearing sensitivity on (winner.model_name, C2).
+    # Step 4: 2x2 weighting x Duan's smearing sensitivity on winner's (model, condition).
     mechanics_specs: tuple[tuple[bool, bool], ...] = (
         (False, False),
         (False, True),
         (True, False),
         (True, True),
     )
+    winner_uses_sw = winner.weighting_mode == DEFAULT_WEIGHTING_MODE
     mechanics_cands: list[CandidateEvaluation] = []
     for use_sw, use_smear in mechanics_specs:
-        if use_sw and not use_smear:
-            mechanics_cands.append(c2_by_model[winner.model_name])
+        if use_sw == winner_uses_sw and use_smear == winner.duan_smearing_enabled:
+            mechanics_cands.append(winner)
         else:
             mechanics_cands.append(
                 evaluate_single_candidate(
                     dataset,
                     winner.model_name,
-                    "C2_physics_normalized_strict",
+                    winner.ablation_condition,
                     use_sample_weight=use_sw,
                     use_smearing=use_smear,
                     use_allometric_log=True,
                     n_jobs=n_jobs,
+                    c2_by_band_and_lens=c2_by_model[winner.model_name].by_band_and_lens,
                 )
             )
 
@@ -1135,7 +1154,8 @@ def run_full_evaluation(
             "by_weight_band": {b: dict(m) for b, m in cand.by_weight_band.items()},
             "is_best_by_bal_mape": bool(cand is best_mech),
             "is_selected": bool(
-                cand.weighting_mode == winner.weighting_mode
+                cand.ablation_condition == winner.ablation_condition
+                and cand.weighting_mode == winner.weighting_mode
                 and cand.duan_smearing_enabled == winner.duan_smearing_enabled
             ),
         }
