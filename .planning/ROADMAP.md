@@ -16,7 +16,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [x] **Phase 1: Forensic Data Curation & Anti-Leakage Split** - Pin Python 3.12 (`uv`), build the deterministic Audit §9 dataset ingestor (`1,738` clean / `15` quarantined), and assign reproducible zero-leakage 5-fold `session_id` splits. (completed 2026-11-22)
 - [x] **Phase 2: Classical PDI Engine, Optical Calibration & Watershed** - Build the shared EXIF-first OpenCV preprocessing and anti-LCD single-bird segmentation engine, extract strictly mask-gated morphometric/chromatic/optical features with 4-stage "X-Ray" outputs, and implement Marker-based Watershed multi-bird separation. (completed 2026-11-23)
 - [x] **Phase 3: Tabular Regression, Optical Ablation & Production Bundling** - Train and evaluate interpretable tabular weight regressors on locked folds, prove EXIF optical calibration gain via 4-way ablation and lens-flip audit, and publish dual-bundle production + out-of-fold pitch artifacts. (completed 2026-11-23)
-- [ ] **Phase 4: FastAPI Local Backend & Interactive Pitch Web Studio** - Serve `< 500 ms` local REST endpoints and deliver the 3-tab React + TypeScript + Vite + Tailwind CSS pitch studio for live PDI "X-Ray", curated OOF presets, Watershed demo, and stratified audit metrics.
+- [x] **Phase 4: FastAPI Local Backend & Interactive Pitch Web Studio** - Serve `< 500 ms` local REST endpoints and deliver the 3-tab React + TypeScript + Vite + Tailwind CSS pitch studio for live PDI "X-Ray", curated OOF presets, Watershed demo, and stratified audit metrics. (completed 2026-11-24)
 
 ## Phase Details
 
@@ -112,4 +112,4 @@ Phases execute in numeric order: 1 → 2 → 3 → 4
 | 1. Forensic Data Curation & Anti-Leakage Split | 3/3 | Complete    | 2026-11-22 |
 | 2. Classical PDI Engine, Optical Calibration & Watershed | 4/4 | Complete    | 2026-11-23 |
 | 3. Tabular Regression, Optical Ablation & Production Bundling | 3/3 | Complete    | 2026-11-23 |
-| 4. FastAPI Local Backend & Interactive Pitch Web Studio | 0/0 | Not started | - |
+| 4. FastAPI Local Backend & Interactive Pitch Web Studio | 4/4 | Complete    | 2026-11-24 |

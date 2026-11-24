@@ -28,11 +28,11 @@ Requirements for the MVP release (code freeze 2026-11-28, pitch 2026-11-30). Eac
 
 ### Interactive Pitch Web Studio (Local API & Frontend)
 
-- [ ] **WEB-01** *(PRD REQ-11)*: Local FastAPI backend exposes `/api/predict`, `/api/watershed-demo`, `/api/presets`, `/api/metrics` (and `/api/health`) with Pydantic v2 validation, startup `lifespan` caching, `async def` bounded upload intake offloading CPU PDI/ML via `run_in_threadpool`, end-to-end inference latency `< 500 ms` per image on local CPU, and graceful handling of EXIF-stripped JPEG or RGBA PNG uploads.
-- [ ] **WEB-02** *(PRD REQ-12)*: User can upload any broiler image in the React + TypeScript + Vite + Tailwind CSS Inference & "X-Ray" PDI Studio (with automatic EXIF focal/zoom reading, missing-EXIF warning pill, and manual lens/zoom override) to inspect all 4 PDI stages side-by-side, morphometric and chromatic feature values (including yellow-down vs. white-plumage indicator), estimated weight (g) with expected error band, Cobb Avian 48 developmental age stage, and a live client-side simulated flock average/uniformity tracker.
-- [ ] **WEB-03** *(PRD REQ-13)*: User can one-click run curated out-of-fold validation presets spanning the growth curve (young chick ~180 g, intermediate ~550 g, heavy broiler ~1,600 g, and hard white-on-white dorsal bucket `>1,000 g`) showing Ground Truth weight vs. Predicted weight, absolute error (g), and `%` error live during the pitch.
-- [ ] **WEB-04** *(PRD REQ-14 + `docs/proposta_pdi.md.pdf`)*: User can explore a dedicated Watershed & Future Vision tab demonstrating interactive Marker-based Watershed separation on multi-bird scenes (`417`, `757`, `823`, `1520`) or custom uploads with separated bird counts, per-bird pixel areas, and illustrative per-bird estimated weights (g) + scene mean weight (g) (displaying an explicit disclaimer that folders `417`/`757`/`823`/`1520` carry only group-sum ground truth and transparently comparing predicted sum vs. group-sum label), alongside an architectural comparison panel contrasting the current handheld/bucket MVP with the conceptual v2 fixed ceiling-camera barn roadmap (`BARN-01`).
-- [ ] **WEB-05** *(PRD REQ-15 + `docs/dataset/DOCUMENTACAO_DATASET_BROILER_COBB_AVIAN.md` + `docs/proposta_pdi.md.pdf`)*: User can inspect a Validation Metrics & Forensic Audit Dashboard displaying 5-fold cross-validation KPIs (contextualized alongside the literature `R² > 0.9` benchmark), an interactive Actual vs. Predicted scatter plot with $y=x$ reference line, optical calibration ablation charts, stratified error tables by weight band/lens/scenario, and the forensic data curation funnel (`1,753 → 1,738` clean, explicitly reconciling the Mendeley published claim of `"1,772 images / daily for 45 days"` against the disk-audited `9` dates / `~7–29 days` / `116–2,093 g` range and disclosing the `801–1,216 g` coverage gap).
+- [x] **WEB-01** *(PRD REQ-11)*: Local FastAPI backend exposes `/api/predict`, `/api/watershed-demo`, `/api/presets`, `/api/metrics` (and `/api/health`) with Pydantic v2 validation, startup `lifespan` caching, `async def` bounded upload intake offloading CPU PDI/ML via `run_in_threadpool`, end-to-end inference latency `< 500 ms` per image on local CPU, and graceful handling of EXIF-stripped JPEG or RGBA PNG uploads.
+- [x] **WEB-02** *(PRD REQ-12)*: User can upload any broiler image in the React + TypeScript + Vite + Tailwind CSS Inference & "X-Ray" PDI Studio (with automatic EXIF focal/zoom reading, missing-EXIF warning pill, and manual lens/zoom override) to inspect all 4 PDI stages side-by-side, morphometric and chromatic feature values (including yellow-down vs. white-plumage indicator), estimated weight (g) with expected error band, Cobb Avian 48 developmental age stage, and a live client-side simulated flock average/uniformity tracker.
+- [x] **WEB-03** *(PRD REQ-13)*: User can one-click run curated out-of-fold validation presets spanning the growth curve (young chick ~180 g, intermediate ~550 g, heavy broiler ~1,600 g, and hard white-on-white dorsal bucket `>1,000 g`) showing Ground Truth weight vs. Predicted weight, absolute error (g), and `%` error live during the pitch.
+- [x] **WEB-04** *(PRD REQ-14 + `docs/proposta_pdi.md.pdf`)*: User can explore a dedicated Watershed & Future Vision tab demonstrating interactive Marker-based Watershed separation on multi-bird scenes (`417`, `757`, `823`, `1520`) or custom uploads with separated bird counts, per-bird pixel areas, and illustrative per-bird estimated weights (g) + scene mean weight (g) (displaying an explicit disclaimer that folders `417`/`757`/`823`/`1520` carry only group-sum ground truth and transparently comparing predicted sum vs. group-sum label), alongside an architectural comparison panel contrasting the current handheld/bucket MVP with the conceptual v2 fixed ceiling-camera barn roadmap (`BARN-01`).
+- [x] **WEB-05** *(PRD REQ-15 + `docs/dataset/DOCUMENTACAO_DATASET_BROILER_COBB_AVIAN.md` + `docs/proposta_pdi.md.pdf`)*: User can inspect a Validation Metrics & Forensic Audit Dashboard displaying 5-fold cross-validation KPIs (contextualized alongside the literature `R² > 0.9` benchmark), an interactive Actual vs. Predicted scatter plot with $y=x$ reference line, optical calibration ablation charts, stratified error tables by weight band/lens/scenario, and the forensic data curation funnel (`1,753 → 1,738` clean, explicitly reconciling the Mendeley published claim of `"1,772 images / daily for 45 days"` against the disk-audited `9` dates / `~7–29 days` / `116–2,093 g` range and disclosing the `801–1,216 g` coverage gap).
 
 ## v2 Requirements
 
@@ -82,11 +82,11 @@ Which phases cover which requirements. Populated during roadmap creation.
 | MOD-01 | Phase 3 | Complete |
 | MOD-02 | Phase 3 | Complete |
 | MOD-03 | Phase 3 | Complete |
-| WEB-01 | Phase 4 | Pending |
-| WEB-02 | Phase 4 | Pending |
-| WEB-03 | Phase 4 | Pending |
-| WEB-04 | Phase 4 | Pending |
-| WEB-05 | Phase 4 | Pending |
+| WEB-01 | Phase 4 | Complete |
+| WEB-02 | Phase 4 | Complete |
+| WEB-03 | Phase 4 | Complete |
+| WEB-04 | Phase 4 | Complete |
+| WEB-05 | Phase 4 | Complete |
 
 **Coverage:**
 
@@ -96,4 +96,4 @@ Which phases cover which requirements. Populated during roadmap creation.
 
 ---
 *Requirements defined: 2026-11-20*
-*Last updated: 2026-11-23 after Phase 3 completion*
+*Last updated: 2026-11-24 after Phase 4 completion*
