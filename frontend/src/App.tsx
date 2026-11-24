@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useState } from "react";
 import { AppShell, type TabId } from "./components/layout/AppShell.tsx";
 import { InlineErrorBanner } from "./components/layout/InlineErrorBanner.tsx";
+import { MetricsAuditTab } from "./components/metrics/MetricsAuditTab.tsx";
 import { XRayStudioTab } from "./components/studio/XRayStudioTab.tsx";
 import { FutureVisionTab } from "./components/vision/FutureVisionTab.tsx";
+import { WatershedStudioTab } from "./components/watershed/WatershedStudioTab.tsx";
 import { useHealth, usePresets } from "./hooks/useStudioHooks.ts";
 import { cn } from "./lib/cn.ts";
-import { pluralizePtBr } from "./lib/format.ts";
 
 const VALID_HASH_TO_TAB: Readonly<Record<string, TabId>> = {
   "#estudio": "estudio",
@@ -97,7 +98,7 @@ export default function App() {
           />
         </section>
 
-        {/* Tab 2: Separação Watershed (Wave 4 mount slot) */}
+        {/* Tab 2: Separação Watershed (auto-loads ws_417 lazily on first activation, kept mounted thereafter) */}
         <section
           role="tabpanel"
           id="panel-watershed"
@@ -105,22 +106,15 @@ export default function App() {
           hidden={activeTab !== "watershed"}
           className={cn(activeTab !== "watershed" && "hidden")}
         >
-          <div className="rounded-xl border border-border bg-surface p-6">
-            <p className="text-[12px] font-semibold leading-[1.33] uppercase tracking-wide text-ink-muted">
-              Módulo Multi-Aves · Marker-based Watershed Clássico
-            </p>
-            <h1 className="mt-1 text-[20px] font-semibold leading-[1.2] text-ink">
-              Separação Watershed
-            </h1>
-            <p className="mt-2 text-[14px] font-normal leading-[1.5] text-ink-muted">
-              {presetsLoading
-                ? "Carregando presets multi-aves..."
-                : `${pluralizePtBr(watershedPresets.length, "cena curada disponível", "cenas curadas disponíveis")} para separação clássica via Transformada de Distância (EDT).`}
-            </p>
-          </div>
+          <WatershedStudioTab
+            isActive={activeTab === "watershed"}
+            presets={watershedPresets}
+            presetsLoading={presetsLoading}
+            onLatency={setLastLatencyMs}
+          />
         </section>
 
-        {/* Tab 3: Auditoria & Métricas (Wave 4 mount slot) */}
+        {/* Tab 3: Auditoria & Métricas (lazily fetches and caches GET /api/metrics via useMetrics) */}
         <section
           role="tabpanel"
           id="panel-metricas"
@@ -128,19 +122,7 @@ export default function App() {
           hidden={activeTab !== "metricas"}
           className={cn(activeTab !== "metricas" && "hidden")}
         >
-          <div className="rounded-xl border border-border bg-surface p-6">
-            <p className="text-[12px] font-semibold leading-[1.33] uppercase tracking-wide text-ink-muted">
-              Validação Cruzada 5-Fold · Ablação Óptica C1–C4
-            </p>
-            <h1 className="mt-1 text-[20px] font-semibold leading-[1.2] text-ink">
-              Auditoria &amp; Métricas
-            </h1>
-            <p className="mt-2 text-[14px] font-normal leading-[1.5] text-ink-muted">
-              Painel científico de validação OOF pronto para conexão ao relatório de avaliação
-              (1.738 imagens · 188 sessões ·{" "}
-              {health ? `${health.n_features} atributos` : "39 atributos"}).
-            </p>
-          </div>
+          <MetricsAuditTab isActive={activeTab === "metricas"} />
         </section>
 
         {/* Tab 4: Visão Futura (v2) — 100% static conceptual documentation (PROIBIÇÃO 5) */}
