@@ -2,6 +2,9 @@
 phase: 04-fastapi-local-backend-interactive-pitch-web-studio
 plan: "04"
 subsystem: frontend-watershed-metrics-e2e
+requirements-completed:
+  - WEB-04
+  - WEB-05
 tags:
   - watershed
   - recharts-v3
